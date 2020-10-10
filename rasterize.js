@@ -22,23 +22,15 @@ var viewportMatrix = mat4.create(); // viewport matrix in JS
 var gl = null; // the all powerful gl object. It's all here folks!
 
 var vertexBuffer; // this contains vertex coordinates in triples
-var normalBuffer; // this contains normal vectors for each vertex
 var triangleBuffer; // this contains indices into vertexBuffer in triples
 var shapeNumBuffer; // what number shape is this?
-var ambientBuffer; // ambient rgb values for each vertex
-var diffuseBuffer; // diffuse rgb values for each vertex
-var specularBuffer; // specular rgb values for each vertex
-var specExpBuffer; // specular exponent for each vertex
+var colorBuffer; // Blinn-Phong rgb values for each vertex
 var triBufferSize = 0; // the number of indices in the triangle buffer
 var shapeNum = 0; // which shape are we working with? Tris 0,1, Ellipsoids 2-4
 
 // Attributes
 var vertexPositionAttrib; // where to put position for vertex shader
-var vertexNormalAttrib; // where to put normals for vertex shader
-var vertexAmbientAttrib; // ambient color component
-var vertexDiffuseAttrib; // diffuse color component
-var vertexSpecularAttrib; // specular color component
-var vertexSpecExpAttrib; // specular exponent
+var vertexColorAttrib; // Blinn-Phong color components
 var vertexShapeNumAttrib; // shape number
 
 // Uniforms
@@ -160,33 +152,24 @@ function loadTriangles() {
     if (inputTriangles != String.null) {
         for (var set = 0; set < inputTriangles.length; set++) {
             var coordArray = []; // array of xyz coords for vertex
-            var normArray = []; // array of xyz normal coords for vertex
-            var indexArray = []; // array of indices to make triangles
-            var ambientArray = []; // ambient rgb for each vertex
-            var diffuseArray = []; // diffuse rgb for each vertex
-            var specularArray = []; // specular rgb for each vertex
-            var specExpArray = []; // specular exponent for BP shading
             var shapeNumArray = []; // what shape is this?
+            var colorArray = []; // Pre-calculated Blinn-Phong color for vtx
+            var indexArray = []; // array of indices to make triangles
 
-            // Get vertices and colors from JSON
+            var normArray = [0,0,-1]; // array of xyz normal coords for vertex
+            var ambientArray = inputTriangles[set].material.ambient; // ambient rgb for each vertex
+            var diffuseArray = inputTriangles[set].material.diffuse; // diffuse rgb for each vertex
+            var specularArray = inputTriangles[set].material.specular; // specular rgb for each vertex
+            var specExp = inputTriangles[set].material.n; // specular exponent for BP shading
+
+            // Get verticesfrom JSON
             for (var vertex = 0; vertex < inputTriangles[set].vertices.length; vertex++) {
                 var vtxToAdd = inputTriangles[set].vertices[vertex];
                 coordArray.push(vtxToAdd[0], vtxToAdd[1], vtxToAdd[2]);
-                normArray.push(0,0,-1);
-                ambientArray.push(
-                    inputTriangles[set].material.ambient[0],
-                    inputTriangles[set].material.ambient[1],
-                    inputTriangles[set].material.ambient[2]);
-                diffuseArray.push(
-                    inputTriangles[set].material.diffuse[0],
-                    inputTriangles[set].material.diffuse[1],
-                    inputTriangles[set].material.diffuse[2]);
-                specularArray.push(
-                    inputTriangles[set].material.specular[0],
-                    inputTriangles[set].material.specular[1],
-                    inputTriangles[set].material.specular[2]);
-                specExpArray.push(inputTriangles[set].material.n);
                 shapeNumArray.push(shapeNum);
+
+                var colorToAdd = getBPColor(vtxToAdd, normArray, ambientArray, diffuseArray, specularArray, specExp);
+                colorArray.push(colorToAdd[0], colorToAdd[1], colorToAdd[2]);
             }
 
             // Get triangle indices from JSON
@@ -200,7 +183,7 @@ function loadTriangles() {
             }
 
             // Activate buffers
-            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
+            setupBuffers(coordArray, colorArray, indexArray, shapeNumArray);
 
             shapeNum++; // done with this shape
         }
@@ -216,38 +199,32 @@ function loadEllipsoids() {
     if (inputEllipsoids != String.null) {
         for (var ellipsoid = 0; ellipsoid < inputEllipsoids.length; ellipsoid++) {
             var coordArray = []; // array of xyz coords for vertex
-            var normArray = []; // array of xyz normal coords for vertex
-            var indexArray = []; // array of indices to make triangles
-            var ambientArray = []; // ambient rgb for each vertex
-            var diffuseArray = []; // diffuse rgb for each vertex
-            var specularArray = []; // specular rgb for each vertex
-            var specExpArray = []; // specular exponent for BP shading
             var shapeNumArray = []; // what shape is this?
+            var colorArray = []; // Pre-calculated Blinn-Phong color for vtx
+            var indexArray = []; // array of indices to make triangles
+
+            var ambientArray = inputEllipsoids[ellipsoid].ambient; // ambient rgb for each vertex
+            var diffuseArray = inputEllipsoids[ellipsoid].diffuse; // diffuse rgb for each vertex
+            var specularArray = inputEllipsoids[ellipsoid].specular; // specular rgb for each vertex
+            var specExp = inputEllipsoids[ellipsoid].n; // specular exponent for BP shading
 
             // Load vertex and color arrays
             for (var vtxCoord = 0; vtxCoord < sphereFile[0].vertices.length; vtxCoord += 3) {
-                coordArray.push(
+                var normArray = []; // array of xyz normal coords for vertex
+                var vtxToAdd = [
                     sphereFile[0].vertices[vtxCoord], 
                     sphereFile[0].vertices[vtxCoord + 1], 
-                    sphereFile[0].vertices[vtxCoord + 2]);
+                    sphereFile[0].vertices[vtxCoord + 2]
+                ];
+                coordArray.push(vtxToAdd[0], vtxToAdd[1], vtxToAdd[2]);
                 normArray.push(
                     sphereFile[0].normals[vtxCoord],
                     sphereFile[0].normals[vtxCoord + 1],
                     sphereFile[0].normals[vtxCoord + 2]);
-                ambientArray.push(
-                    inputEllipsoids[ellipsoid].ambient[0],
-                    inputEllipsoids[ellipsoid].ambient[1],
-                    inputEllipsoids[ellipsoid].ambient[2]);
-                diffuseArray.push(
-                    inputEllipsoids[ellipsoid].diffuse[0],
-                    inputEllipsoids[ellipsoid].diffuse[1],
-                    inputEllipsoids[ellipsoid].diffuse[2]);
-                specularArray.push(
-                    inputEllipsoids[ellipsoid].specular[0],
-                    inputEllipsoids[ellipsoid].specular[1],
-                    inputEllipsoids[ellipsoid].specular[2]);
-                specExpArray.push(inputEllipsoids[ellipsoid].n);
                 shapeNumArray.push(shapeNum);
+
+                var colorToAdd = getBPColor(vtxToAdd, normArray, ambientArray, diffuseArray, specularArray, specExp);
+                colorArray.push(colorToAdd[0], colorToAdd[1], colorToAdd[2]);
             }
 
             for (var index = 0; index < sphereFile[0].triangles.length; index += 3) {
@@ -260,7 +237,7 @@ function loadEllipsoids() {
             }
 
             // Add this ellipsoid to webGL buffers
-            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
+            setupBuffers(coordArray, colorArray, indexArray, shapeNumArray);
 
             shapeNum++; // done with this shape
         }
@@ -268,41 +245,21 @@ function loadEllipsoids() {
 }
 
 // Send coord, color, tri arrays to WebGL
-function setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray) {
+function setupBuffers(coordArray, colorArray, indexArray, shapeNumArray) {
     // send the vertex coords to webGL
     vertexBuffer = gl.createBuffer(); // init empty vertex coord buffer
     gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate that buffer
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(coordArray),gl.STATIC_DRAW); // coords to that buffer
 
-    // send the vertex normals to webGL
-    normalBuffer = gl.createBuffer(); // init empty vertex normal buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER,normalBuffer); // activate that buffer
-    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(normArray),gl.STATIC_DRAW); // coords to that buffer
+    // send color values to webGL
+    colorBuffer = gl.createBuffer(); // init empty color buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); // activate buffer
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW); // colors to that buffer
 
     // send the triangle indices to webGL
     triangleBuffer = gl.createBuffer(); // init empty triangle index buffer
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer); // activate buffer
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indexArray),gl.STATIC_DRAW); // indices to that buffer
-
-    // send color values to webGL
-    ambientBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, ambientBuffer); // activate buffer
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ambientArray), gl.STATIC_DRAW); // colors to that buffer
-
-    // send color values to webGL
-    diffuseBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, diffuseBuffer); // activate buffer
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(diffuseArray), gl.STATIC_DRAW); // colors to that buffer
-
-    // send color values to webGL
-    specularBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, specularBuffer); // activate buffer
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(specularArray), gl.STATIC_DRAW); // colors to that buffer
-
-    // send color values to webGL
-    specExpBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, specExpBuffer); // activate buffer
-    gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(specExpArray), gl.STATIC_DRAW); // colors to that buffer
 
     // send shape numbers to webGL
     shapeNumBuffer = gl.createBuffer(); // init empty shapeNum buffer
@@ -316,11 +273,7 @@ function setupShaders() {
     // define vertex shader in essl using es6 template strings
     var vShaderCode = `
         attribute vec3 vertexPosition;
-        attribute vec3 vertexNormal;
-        attribute vec3 ambient;
-        attribute vec3 diffuse;
-        attribute vec3 specular;
-        attribute float specularExponent;
+        attribute vec3 color;
         attribute float shapeNum;
 
         varying lowp vec4 vColor;
@@ -372,20 +325,8 @@ function setupShaders() {
                 vertexPositionAttrib = gl.getAttribLocation(shaderProgram, "vertexPosition"); // get pointer to vertex shader input
                 gl.enableVertexAttribArray(vertexPositionAttrib); // input to shader from array
 
-                vertexNormalAttrib = gl.getAttribLocation(shaderProgram, "vertexNormal");
-                gl.enableVertexAttribArray(vertexNormalAttrib);
-
-                vertexAmbientAttrib = gl.getAttribLocation(shaderProgram, "ambient");
-                gl.enableVertexAttribArray(vertexAmbientAttrib);
-
-                vertexDiffuseAttrib = gl.getAttribLocation(shaderProgram, "diffuse");
-                gl.enableVertexAttribArray(vertexDiffuseAttrib);
-
-                vertexSpecularAttrib = gl.getAttribLocation(shaderProgram, "specular");
-                gl.enableVertexAttribArray(vertexSpecularAttrib);
-
-                vertexSpecExpAttrib = gl.getAttribLocation(shaderProgram, "specularExponent");
-                gl.enableVertexAttribArray(vertexSpecExpAttrib);
+                vertexColorAttrib = gl.getAttribLocation(shaderProgram, "color");
+                gl.enableVertexAttribArray(vertexColorAttrib);
 
                 vertexShapeNumAttrib = gl.getAttribLocation(shaderProgram, "shapeNum");
                 gl.enableVertexAttribArray(vertexShapeNumAttrib);
@@ -433,19 +374,9 @@ function renderTriangles() {
     gl.vertexAttribPointer(vertexPositionAttrib,3,gl.FLOAT,false,0,0); // feed
     // gl.uniform1i(altPositionUniform, altPosition); // feed
 
-    // normal buffer: activate and feed into vertex shader
-    gl.bindBuffer(gl.ARRAY_BUFFER,normalBuffer); // activate
-    gl.vertexAttribPointer(vertexNormalAttrib,3,gl.FLOAT,false,0,0); // feed
-
     // color buffers: activate and feed into vertex shader
-    gl.bindBuffer(gl.ARRAY_BUFFER, ambientBuffer); // activate
-    gl.vertexAttribPointer(vertexAmbientAttrib,3,gl.FLOAT,false,0,0); // feed
-    gl.bindBuffer(gl.ARRAY_BUFFER, diffuseBuffer); // activate
-    gl.vertexAttribPointer(vertexDiffuseAttrib,3,gl.FLOAT,false,0,0); // feed
-    gl.bindBuffer(gl.ARRAY_BUFFER, specularBuffer); // activate
-    gl.vertexAttribPointer(vertexSpecularAttrib,3,gl.FLOAT,false,0,0); // feed
-    gl.bindBuffer(gl.ARRAY_BUFFER, specExpBuffer); // activate
-    gl.vertexAttribPointer(vertexSpecExpAttrib,1,gl.FLOAT,false,0,0); // feed
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); // activate
+    gl.vertexAttribPointer(vertexColorAttrib,3,gl.FLOAT,false,0,0); // feed
 
     // shapeNum buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER, shapeNumBuffer); // activate
