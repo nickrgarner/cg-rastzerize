@@ -12,9 +12,10 @@ var eye = new vec3.fromValues(0.5,0.5,-0.5); // default eye position in world sp
 var lookAt = new vec3.fromValues(0,0,1); // Default lookAt vector
 var upVector = new vec3.fromValues(0,1,0); // Default up vector
 var lightLoc = new vec3.fromValues(-0.5,1.5,-0.5); // Default light location
+var lightColor = {ambient: 1, diffuse: 1, specular: 1}; // Color of default light
 var projectionMatrix = mat4.create(); // projection matrix in JS
 var viewMatrix = mat4.create(); // view matrix in JS
-var transformMatrix = mat4.creat(); // transform matrix in JS
+var transformMatrix = mat4.create(); // transform matrix in JS
 var viewportMatrix = mat4.create(); // viewport matrix in JS
 
 /* webgl globals */
@@ -49,6 +50,17 @@ var lightPosUniform; // light position in shaders
 
 
 // ASSIGNMENT HELPER FUNCTIONS
+
+// Returns dot product of two 3D vectors
+function dot( vec1, vec2 ) {
+    return vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z;
+}
+
+// Returns normalized copy of input vector
+function norm( vec1 ) {
+    var magnitude = Math.sqrt( Math.pow( vec1.x, 2 ) + Math.pow( vec1.y, 2 ) + Math.pow( vec1.z, 2 ) );
+    return { x: vec1.x / magnitude, y: vec1.y / magnitude, z: vec1.z / magnitude };
+}
 
 // get the JSON file from the passed URL
 function getJSONFile(url,descr) {
@@ -100,97 +112,47 @@ function setupWebGL() {
  
 } // end setupWebGL
 
-// // read triangles in, load them into webgl buffers
-// function loadTriangles() {
-//     var inputTriangles = getJSONFile(INPUT_TRIANGLES_URL,"triangles");
-//     var inputEllipsoids = getJSONFile(INPUT_ELLIPSOIDS_URL, "");
-//     var sphereFile = getJSONFile("spheren.json","");
+// Calculates Blinn-Phong color for a given vertex
+function getBPColor(vertex, normal, ambient, diffuse, specular, specExp) {
+    // Get normal vector, normalize
+    normal = norm( {
+        x: (normal[0]),
+        y: (normal[1]),
+        z: (normal[2])
+    } );
 
-//     if (inputTriangles != String.null) { 
-//         var whichSetVert; // index of vertex in current triangle set
-//         var whichSetTri; // index of triangle in current triangle set
-//         var coordArray = []; // 1D array of vertex coords for WebGL
-//         var indexArray = []; // 1D array of vertex indices for WebGL
-//         var colorArray = []; // 1D array of vertex colors for WebGL
-//         var normalArray = []; // 1D array of vertex normals for WebGL
-//         var vtxBufferSize = 0; // the number of vertices in the vertex buffer
-//         var vtxToAdd = []; // vtx coords to add to the coord array
-//         var colorToAdd = []; // RGB values to add to color array
-//         var indexOffset = vec3.create(); // the index offset for the current set
-//         var triToAdd = vec3.create(); // tri indices to add to the index array
+    // Get half vector
+    var light = norm( {
+        x: lightLoc[0] - vertex[0],
+        y: lightLoc[1] - vertex[1],
+        z: lightLoc[2] - vertex[2]});
+    var V = norm( {
+        x: eye[0] - vertex[0],
+        y: eye[1] - vertex[1],
+        z: eye[2] - vertex[2]});
+    var half = norm( {
+        x: light.x + V.x,
+        y: light.y + V.y,
+        z: light.z + V.z});
+    
+    // Calculate RGB color components
+    var color = [];
+    for (var i = 0; i < 3; i++) {
+        color[i] = ambient[i] * lightColor.ambient; // ambient term
+        color[i] += diffuse[i] * lightColor.diffuse * dot( normal, light ); // diffuse term
+        color[i] += specular[i] * lightColor.specular * Math.pow( dot( normal, half ), specExp ); // specular term
         
-//         // Setup triangle shapes
-//         for (var whichSet=0; whichSet<inputTriangles.length; whichSet++) {
-//             vec3.set(indexOffset,vtxBufferSize,vtxBufferSize,vtxBufferSize); // update vertex offset
-            
-//             // set up the vertex coord array
-//             for (whichSetVert=0; whichSetVert<inputTriangles[whichSet].vertices.length; whichSetVert++) {
-//                 vtxToAdd = inputTriangles[whichSet].vertices[whichSetVert];
-//                 coordArray.push(vtxToAdd[0],vtxToAdd[1],vtxToAdd[2]);
-//                 colorToAdd = inputTriangles[whichSet].material.diffuse;
-//                 colorArray.push(colorToAdd[0], colorToAdd[1], colorToAdd[2]);
-//             } // end for vertices in set
+        // Clamp color bounds
+        if ( color[i] > 1 ) {
+            color[i] = 1;
+        } 
+        else if ( color[i] < 0 ) {
+            color[i] = 0;
+        }
+    }
 
-//             // set up the triangle index array, adjusting indices across sets
-//             for (whichSetTri=0; whichSetTri<inputTriangles[whichSet].triangles.length; whichSetTri++) {
-//                 vec3.add(triToAdd,indexOffset,inputTriangles[whichSet].triangles[whichSetTri]);
-//                 indexArray.push(triToAdd[0],triToAdd[1],triToAdd[2]);
-//             } // end for triangles in set
-
-//             vtxBufferSize += inputTriangles[whichSet].vertices.length; // total number of vertices
-//             triBufferSize += inputTriangles[whichSet].triangles.length; // total number of tris
-//         } // end for each triangle set
-
-//         // Setup ellipsoid shapes
-//         for (var ellipse = 0; ellipse < inputEllipsoids.length; ellipse++) {
-//             vec3.set(indexOffset,vtxBufferSize,vtxBufferSize,vtxBufferSize); // update vertex offset
-
-//             // push vertex and colors to arrays
-//             for (var vtxCoord = 0; vtxCoord < sphereFile[0].vertices.length; vtxCoord += 3) {
-//                 coordArray.push(sphereFile[0].vertices[vtxCoord], sphereFile[0].vertices[vtxCoord + 1], sphereFile[0].vertices[vtxCoord + 2]);
-//                 colorToAdd = inputEllipsoids[ellipse].diffuse;
-//                 colorArray.push(colorToAdd[0], colorToAdd[1], colorToAdd[2]);
-//             }
-
-//             // push triangles to array
-//             for (var triVert = 0; triVert < sphereFile[0].triangles.length; triVert += 3) {
-//                 var currentTri = [sphereFile[0].triangles[triVert], sphereFile[0].triangles[triVert + 1], sphereFile[0].triangles[triVert + 2]];
-//                 vec3.add(triToAdd, indexOffset, currentTri);
-//                 indexArray.push(triToAdd[0],triToAdd[1],triToAdd[2]);
-//             }
-
-//             vtxBufferSize += (sphereFile[0].vertices.length / 3);
-//             triBufferSize += (sphereFile[0].triangles.length / 3);
-//         }
-
-//         console.log(coordArray);
-//         console.log(colorArray);
-//         console.log(indexArray);
-
-//         triBufferSize *= 3; // now total number of indices
-
-//         console.log(triBufferSize);
-        
-//         // sendBuffers(coordArray, indexArray, colorArray);
-
-//         // send the vertex coords to webGL
-//         vertexBuffer = gl.createBuffer(); // init empty vertex coord buffer
-//         gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate that buffer
-//         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(coordArray),gl.STATIC_DRAW); // coords to that buffer
-        
-//         // send the triangle indices to webGL
-//         triangleBuffer = gl.createBuffer(); // init empty triangle index buffer
-//         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer); // activate that buffer
-//         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indexArray),gl.STATIC_DRAW); // indices to that buffer
-
-//         console.log(triangleBuffer.length);
-
-//         // send color values to webGL
-//         colorBuffer = gl.createBuffer(); // init empty color buffer
-//         gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); // activate colorBuffer
-//         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW); // colors to that buffer
-//     } // end if triangles found
-// } // end load triangles
+    return color;
+}
 
 function loadTriangles() {
     var inputTriangles = getJSONFile(INPUT_TRIANGLES_URL,"triangles");
@@ -214,18 +176,15 @@ function loadTriangles() {
                 ambientArray.push(
                     inputTriangles[set].material.ambient[0],
                     inputTriangles[set].material.ambient[1],
-                    inputTriangles[set].material.ambient[2]
-                );
+                    inputTriangles[set].material.ambient[2]);
                 diffuseArray.push(
                     inputTriangles[set].material.diffuse[0],
                     inputTriangles[set].material.diffuse[1],
-                    inputTriangles[set].material.diffuse[2]
-                );
+                    inputTriangles[set].material.diffuse[2]);
                 specularArray.push(
                     inputTriangles[set].material.specular[0],
                     inputTriangles[set].material.specular[1],
-                    inputTriangles[set].material.specular[2]
-                );
+                    inputTriangles[set].material.specular[2]);
                 specExpArray.push(inputTriangles[set].material.n);
                 shapeNumArray.push(shapeNum);
             }
@@ -241,7 +200,7 @@ function loadTriangles() {
             }
 
             // Activate buffers
-            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray);
+            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
 
             shapeNum++; // done with this shape
         }
@@ -251,6 +210,8 @@ function loadTriangles() {
 function loadEllipsoids() {
     var inputEllipsoids = getJSONFile(INPUT_ELLIPSOIDS_URL, "ellipsoids");
     var sphereFile = getJSONFile("spheren.json","sphere");
+
+    // console.log(sphereFile);
 
     if (inputEllipsoids != String.null) {
         for (var ellipsoid = 0; ellipsoid < inputEllipsoids.length; ellipsoid++) {
@@ -272,23 +233,19 @@ function loadEllipsoids() {
                 normArray.push(
                     sphereFile[0].normals[vtxCoord],
                     sphereFile[0].normals[vtxCoord + 1],
-                    sphereFile[0].normals[vtxCoord + 2]
-                );
+                    sphereFile[0].normals[vtxCoord + 2]);
                 ambientArray.push(
                     inputEllipsoids[ellipsoid].ambient[0],
                     inputEllipsoids[ellipsoid].ambient[1],
-                    inputEllipsoids[ellipsoid].ambient[2]
-                );
+                    inputEllipsoids[ellipsoid].ambient[2]);
                 diffuseArray.push(
                     inputEllipsoids[ellipsoid].diffuse[0],
                     inputEllipsoids[ellipsoid].diffuse[1],
-                    inputEllipsoids[ellipsoid].diffuse[2]
-                );
+                    inputEllipsoids[ellipsoid].diffuse[2]);
                 specularArray.push(
                     inputEllipsoids[ellipsoid].specular[0],
                     inputEllipsoids[ellipsoid].specular[1],
-                    inputEllipsoids[ellipsoid].specular[2]
-                );
+                    inputEllipsoids[ellipsoid].specular[2]);
                 specExpArray.push(inputEllipsoids[ellipsoid].n);
                 shapeNumArray.push(shapeNum);
             }
@@ -370,7 +327,7 @@ function setupShaders() {
 
         void main(void) {
             gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
-            vColor = vec4(vertexColor, 1.0);
+            vColor = vec4(diffuse, 1.0);
         }
     `;
     
@@ -428,7 +385,7 @@ function setupShaders() {
                 gl.enableVertexAttribArray(vertexSpecularAttrib);
 
                 vertexSpecExpAttrib = gl.getAttribLocation(shaderProgram, "specularExponent");
-                gl.enableVertexAttribArray(vertexSpecExpAttrib)
+                gl.enableVertexAttribArray(vertexSpecExpAttrib);
 
                 vertexShapeNumAttrib = gl.getAttribLocation(shaderProgram, "shapeNum");
                 gl.enableVertexAttribArray(vertexShapeNumAttrib);
@@ -509,8 +466,7 @@ function main() {
   setupWebGL(); // set up the webGL environment
   loadTriangles(); // load in the triangles from tri file
   loadEllipsoids(); // load the ellipsoids from json
-  console.log("triBufferSize = " + triBufferSize);
-//   setupShaders(); // setup the webGL shaders
-//   renderTriangles(); // draw the triangles using webGL
+  setupShaders(); // setup the webGL shaders
+  renderTriangles(); // draw the triangles using webGL
 
 } // end main
