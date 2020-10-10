@@ -11,7 +11,7 @@ const INPUT_ELLIPSOIDS_URL = "https://ncsucgclass.github.io/prog3/ellipsoids.jso
 var eye = new vec3.fromValues(0.5,0.5,-0.5); // default eye position in world space
 var lookAt = new vec3.fromValues(0,0,1); // Default lookAt vector
 var upVector = new vec3.fromValues(0,1,0); // Default up vector
-var lightLoc = new vec3.fromValues(-0.5,1.5,-0.5); // Default light location
+var lightPos = new vec3.fromValues(-0.5,1.5,-0.5); // Default light location
 var lightColor = {ambient: 1, diffuse: 1, specular: 1}; // Color of default light
 var projectionMatrix = mat4.create(); // projection matrix in JS
 var viewMatrix = mat4.create(); // view matrix in JS
@@ -47,7 +47,7 @@ var projMatrixUniform; // projection matrix in shaders
 var viewMatrixUniform; // view matrix in shaders
 var xformMatrixUniform; // transform matrix in shaders
 var lightPosUniform; // light position in shaders
-
+var lightColorUniform; // light color in shaders
 
 // ASSIGNMENT HELPER FUNCTIONS
 
@@ -210,11 +210,8 @@ function loadTriangles() {
     }
 }
 
-function loadEllipsoids() {
+function loadEllipsoidsParam() {
     var inputEllipsoids = getJSONFile(INPUT_ELLIPSOIDS_URL, "ellipsoids");
-    var sphereFile = getJSONFile("spheren.json","sphere");
-
-    // console.log(sphereFile);
 
     if (inputEllipsoids != String.null) {
         for (var ellipsoid = 0; ellipsoid < inputEllipsoids.length; ellipsoid++) {
@@ -226,49 +223,132 @@ function loadEllipsoids() {
             var specularArray = []; // specular rgb for each vertex
             var specExpArray = []; // specular exponent for BP shading
             var shapeNumArray = []; // what shape is this?
+            var vertexCount = 0; // count of vertices for index array
 
-            // Load vertex and color arrays
-            for (var vtxCoord = 0; vtxCoord < sphereFile[0].vertices.length; vtxCoord += 3) {
-                coordArray.push(
-                    sphereFile[0].vertices[vtxCoord], 
-                    sphereFile[0].vertices[vtxCoord + 1], 
-                    sphereFile[0].vertices[vtxCoord + 2]);
-                normArray.push(
-                    sphereFile[0].normals[vtxCoord],
-                    sphereFile[0].normals[vtxCoord + 1],
-                    sphereFile[0].normals[vtxCoord + 2]);
-                ambientArray.push(
-                    inputEllipsoids[ellipsoid].ambient[0],
-                    inputEllipsoids[ellipsoid].ambient[1],
-                    inputEllipsoids[ellipsoid].ambient[2]);
-                diffuseArray.push(
-                    inputEllipsoids[ellipsoid].diffuse[0],
-                    inputEllipsoids[ellipsoid].diffuse[1],
-                    inputEllipsoids[ellipsoid].diffuse[2]);
-                specularArray.push(
-                    inputEllipsoids[ellipsoid].specular[0],
-                    inputEllipsoids[ellipsoid].specular[1],
-                    inputEllipsoids[ellipsoid].specular[2]);
-                specExpArray.push(inputEllipsoids[ellipsoid].n);
-                shapeNumArray.push(shapeNum);
-            }
+            var ellCenter = {
+                x: inputEllipsoids[ellipsoid].x,
+                y: inputEllipsoids[ellipsoid].y,
+                z: inputEllipsoids[ellipsoid].z
+            };
+            var numCircles = 32; // how many circles to make sphere out of
 
-            for (var index = 0; index < sphereFile[0].triangles.length; index += 3) {
-                indexArray.push(
-                    sphereFile[0].triangles[index],
-                    sphereFile[0].triangles[index + 1],
-                    sphereFile[0].triangles[index + 2]
-                );
-                triBufferSize += 3;
+            // Get vertex coords and colors, push to arrays for buffers
+            for (var latitude = 0; latitude < numCircles; latitude++) {
+                var theta = (latitude / numCircles) * Math.PI;
+                for (var longitude = 0; longitude < numCircles; longitude++) {
+                    var phi = (longitude / numCircles) * 2 * Math.PI;
+
+                    // Parameterize ellipsoid
+                    var a = inputEllipsoids[ellipsoid].a;
+                    var b = inputEllipsoids[ellipsoid].b;
+                    var c = inputEllipsoids[ellipsoid].c;
+
+                    var x = ellCenter.x + (a * Math.sin(theta) * Math.cos(phi));
+                    var y = ellCenter.y + (b * Math.sin(theta) * Math.sin(phi));
+                    var z = ellCenter.z + (c * Math.cos(theta));
+
+                    coordArray.push(x,y,z);
+                    normArray.push(
+                        Math.sin(theta) * Math.cos(phi),
+                        Math.sin(theta) * Math.sin(phi),
+                        Math.cos(theta));
+                    ambientArray.push(
+                        inputEllipsoids[ellipsoid].ambient[0],
+                        inputEllipsoids[ellipsoid].ambient[1],
+                        inputEllipsoids[ellipsoid].ambient[2]);
+                    diffuseArray.push(
+                        inputEllipsoids[ellipsoid].diffuse[0],
+                        inputEllipsoids[ellipsoid].diffuse[1],
+                        inputEllipsoids[ellipsoid].diffuse[2]);
+                    specularArray.push(
+                        inputEllipsoids[ellipsoid].specular[0],
+                        inputEllipsoids[ellipsoid].specular[1],
+                        inputEllipsoids[ellipsoid].specular[2]);
+                    specExpArray.push(inputEllipsoids[ellipsoid].n);
+                    shapeNumArray.push(shapeNum);
+
+                    // Get indices based on 2 tris between each longitude
+                    var vtx1 = vertexCount;
+                    var vtx2 = vertexCount + numCircles;
+
+                    var tri1 = [vtx1, vtx2, vtx1 + 1];
+                    var tri2 = [vtx2, vtx2 + 1, vtx1 + 1];
+
+                    indexArray.push(tri1[0], tri1[1], tri1[2], tri2[0], tri2[1],tri2[2]);
+                    triBufferSize += 6;
+
+                    vertexCount++; // done with this vertex
+                }
             }
 
             // Add this ellipsoid to webGL buffers
             setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
 
-            shapeNum++; // done with this shape
+            shapeNum++ // done with this shape
         }
     }
+
 }
+
+// function loadEllipsoids() {
+//     var inputEllipsoids = getJSONFile(INPUT_ELLIPSOIDS_URL, "ellipsoids");
+//     var sphereFile = getJSONFile("spheren.json","sphere");
+
+//     // console.log(sphereFile);
+
+//     if (inputEllipsoids != String.null) {
+//         for (var ellipsoid = 0; ellipsoid < inputEllipsoids.length; ellipsoid++) {
+//             var coordArray = []; // array of xyz coords for vertex
+//             var normArray = []; // array of xyz normal coords for vertex
+//             var indexArray = []; // array of indices to make triangles
+//             var ambientArray = []; // ambient rgb for each vertex
+//             var diffuseArray = []; // diffuse rgb for each vertex
+//             var specularArray = []; // specular rgb for each vertex
+//             var specExpArray = []; // specular exponent for BP shading
+//             var shapeNumArray = []; // what shape is this?
+
+//             // Load vertex and color arrays
+//             for (var vtxCoord = 0; vtxCoord < sphereFile[0].vertices.length; vtxCoord += 3) {
+//                 coordArray.push(
+//                     sphereFile[0].vertices[vtxCoord], 
+//                     sphereFile[0].vertices[vtxCoord + 1], 
+//                     sphereFile[0].vertices[vtxCoord + 2]);
+//                 normArray.push(
+//                     sphereFile[0].normals[vtxCoord],
+//                     sphereFile[0].normals[vtxCoord + 1],
+//                     sphereFile[0].normals[vtxCoord + 2]);
+//                 ambientArray.push(
+//                     inputEllipsoids[ellipsoid].ambient[0],
+//                     inputEllipsoids[ellipsoid].ambient[1],
+//                     inputEllipsoids[ellipsoid].ambient[2]);
+//                 diffuseArray.push(
+//                     inputEllipsoids[ellipsoid].diffuse[0],
+//                     inputEllipsoids[ellipsoid].diffuse[1],
+//                     inputEllipsoids[ellipsoid].diffuse[2]);
+//                 specularArray.push(
+//                     inputEllipsoids[ellipsoid].specular[0],
+//                     inputEllipsoids[ellipsoid].specular[1],
+//                     inputEllipsoids[ellipsoid].specular[2]);
+//                 specExpArray.push(inputEllipsoids[ellipsoid].n);
+//                 shapeNumArray.push(shapeNum);
+//             }
+
+//             for (var index = 0; index < sphereFile[0].triangles.length; index += 3) {
+//                 indexArray.push(
+//                     sphereFile[0].triangles[index],
+//                     sphereFile[0].triangles[index + 1],
+//                     sphereFile[0].triangles[index + 2]
+//                 );
+//                 triBufferSize += 3;
+//             }
+
+//             // Add this ellipsoid to webGL buffers
+//             setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
+
+//             shapeNum++; // done with this shape
+//         }
+//     }
+// }
 
 // Send coord, color, tri arrays to WebGL
 function setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray) {
@@ -323,14 +403,39 @@ function setupShaders() {
         attribute vec3 ambient;
         attribute vec3 diffuse;
         attribute vec3 specular;
-        attribute float specularExponent; 
+        attribute float specularExponent;
         attribute float shapeNum;
+
+        uniform vec3 eyePos;
+        uniform vec3 lightPos;
+        uniform vec3 lightColor;
+        uniform mat4 projMatrix;
+        uniform mat4 viewMatrix;
+        uniform mat4 xformMatrix;
 
         varying lowp vec4 vColor;
 
         void main(void) {
+            vec3 N = normalize(vertexNormal);
+            vec3 L = normalize(lightPos);
+            vec3 V = normalize(
+                eyePos[0] - vertexPosition[0], // x
+                eyePos[1] - vertexPosition[1], // y
+                eyePos[2] - vertexPosition[2]); // z
+            vec3 half = normalize(
+                L[0] + V[0], // x
+                L[1] + V[1], // y
+                L[2] + V[2]); // z
+            
+            vec3 color;
+            for (int i = 0; i < 3; i++) {
+                color[i] = ambient[i] * lightColor[0]; // ambient term
+                color[i] += diffuse[i] * lightColor[1] * dot(N, L); // diffuse term
+                color[i] += specular[i] * lightColor[2] * pow(dot(N, half), specularExponent);  // specular term
+            }
+
             gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
-            vColor = vec4(diffuse, 1.0);
+            vColor = vec4(color, 1.0);
         }
     `;
     
@@ -407,7 +512,10 @@ function setupShaders() {
                 gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
 
                 lightPosUniform = gl.getUniformLocation(shaderProgram, 'lightPos');
-                gl.uniform3fv(lightPosUniform, lightLoc);
+                gl.uniform3fv(lightPosUniform, lightPos);
+
+                lightColorUniform = gl.getUniformLocation(shaderProgram, 'lightColor');
+                gl.uniform3fv(lightColorUniform, lightColor);
 
             } // end if no shader program link errors
         } // end if no compile errors
@@ -463,7 +571,7 @@ function main() {
   
   setupWebGL(); // set up the webGL environment
   loadTriangles(); // load in the triangles from tri file
-  loadEllipsoids(); // load the ellipsoids from json
+  loadEllipsoidsParam(); // load the ellipsoids from json
   setupShaders(); // setup the webGL shaders
   renderTriangles(); // draw the triangles using webGL
 
