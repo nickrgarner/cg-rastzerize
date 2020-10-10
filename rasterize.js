@@ -12,6 +12,10 @@ var eye = new vec3.fromValues(0.5,0.5,-0.5); // default eye position in world sp
 var lookAt = new vec3.fromValues(0,0,1); // Default lookAt vector
 var upVector = new vec3.fromValues(0,1,0); // Default up vector
 var lightLoc = new vec3.fromValues(-0.5,1.5,-0.5); // Default light location
+var projectionMatrix = mat4.create(); // projection matrix in JS
+var viewMatrix = mat4.create(); // view matrix in JS
+var transformMatrix = mat4.creat(); // transform matrix in JS
+var viewportMatrix = mat4.create(); // viewport matrix in JS
 
 /* webgl globals */
 var gl = null; // the all powerful gl object. It's all here folks!
@@ -19,6 +23,7 @@ var gl = null; // the all powerful gl object. It's all here folks!
 var vertexBuffer; // this contains vertex coordinates in triples
 var normalBuffer; // this contains normal vectors for each vertex
 var triangleBuffer; // this contains indices into vertexBuffer in triples
+var shapeNumBuffer; // what number shape is this?
 var ambientBuffer; // ambient rgb values for each vertex
 var diffuseBuffer; // diffuse rgb values for each vertex
 var specularBuffer; // specular rgb values for each vertex
@@ -33,8 +38,14 @@ var vertexAmbientAttrib; // ambient color component
 var vertexDiffuseAttrib; // diffuse color component
 var vertexSpecularAttrib; // specular color component
 var vertexSpecExpAttrib; // specular exponent
+var vertexShapeNumAttrib; // shape number
 
-// TODO: Uniforms
+// Uniforms
+var eyePosUniform; // position of eye in shaders
+var projMatrixUniform; // projection matrix in shaders
+var viewMatrixUniform; // view matrix in shaders
+var xformMatrixUniform; // transform matrix in shaders
+var lightPosUniform; // light position in shaders
 
 
 // ASSIGNMENT HELPER FUNCTIONS
@@ -193,6 +204,7 @@ function loadTriangles() {
             var diffuseArray = []; // diffuse rgb for each vertex
             var specularArray = []; // specular rgb for each vertex
             var specExpArray = []; // specular exponent for BP shading
+            var shapeNumArray = []; // what shape is this?
 
             // Get vertices and colors from JSON
             for (var vertex = 0; vertex < inputTriangles[set].vertices.length; vertex++) {
@@ -215,6 +227,7 @@ function loadTriangles() {
                     inputTriangles[set].material.specular[2]
                 );
                 specExpArray.push(inputTriangles[set].material.n);
+                shapeNumArray.push(shapeNum);
             }
 
             // Get triangle indices from JSON
@@ -224,10 +237,13 @@ function loadTriangles() {
                     inputTriangles[set].triangles[face][1],
                     inputTriangles[set].triangles[face][2]
                 );
+                triBufferSize += 3;
             }
 
             // Activate buffers
             setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray);
+
+            shapeNum++; // done with this shape
         }
     }
 }
@@ -244,6 +260,8 @@ function loadEllipsoids() {
             var ambientArray = []; // ambient rgb for each vertex
             var diffuseArray = []; // diffuse rgb for each vertex
             var specularArray = []; // specular rgb for each vertex
+            var specExpArray = []; // specular exponent for BP shading
+            var shapeNumArray = []; // what shape is this?
 
             // Load vertex and color arrays
             for (var vtxCoord = 0; vtxCoord < sphereFile[0].vertices.length; vtxCoord += 3) {
@@ -271,6 +289,8 @@ function loadEllipsoids() {
                     inputEllipsoids[ellipsoid].specular[1],
                     inputEllipsoids[ellipsoid].specular[2]
                 );
+                specExpArray.push(inputEllipsoids[ellipsoid].n);
+                shapeNumArray.push(shapeNum);
             }
 
             for (var index = 0; index < sphereFile[0].triangles.length; index += 3) {
@@ -279,16 +299,19 @@ function loadEllipsoids() {
                     sphereFile[0].triangles[index + 1],
                     sphereFile[0].triangles[index + 2]
                 );
+                triBufferSize += 3;
             }
 
             // Add this ellipsoid to webGL buffers
-            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray);
+            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
+
+            shapeNum++; // done with this shape
         }
     }
 }
 
 // Send coord, color, tri arrays to WebGL
-function setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray) {
+function setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray) {
     // send the vertex coords to webGL
     vertexBuffer = gl.createBuffer(); // init empty vertex coord buffer
     gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate that buffer
@@ -301,28 +324,33 @@ function setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseAr
 
     // send the triangle indices to webGL
     triangleBuffer = gl.createBuffer(); // init empty triangle index buffer
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer); // activate that buffer
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffer); // activate buffer
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indexArray),gl.STATIC_DRAW); // indices to that buffer
 
     // send color values to webGL
     ambientBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, ambientBuffer); // activate colorBuffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, ambientBuffer); // activate buffer
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ambientArray), gl.STATIC_DRAW); // colors to that buffer
 
     // send color values to webGL
     diffuseBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, diffuseBuffer); // activate colorBuffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, diffuseBuffer); // activate buffer
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(diffuseArray), gl.STATIC_DRAW); // colors to that buffer
 
     // send color values to webGL
     specularBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, specularBuffer); // activate colorBuffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, specularBuffer); // activate buffer
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(specularArray), gl.STATIC_DRAW); // colors to that buffer
 
     // send color values to webGL
     specExpBuffer = gl.createBuffer(); // init empty color buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, specExpBuffer); // activate colorBuffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, specExpBuffer); // activate buffer
     gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(specExpArray), gl.STATIC_DRAW); // colors to that buffer
+
+    // send shape numbers to webGL
+    shapeNumBuffer = gl.createBuffer(); // init empty shapeNum buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, shapeNumBuffer); // activate buffer
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(shapeNumArray), gl.STATIC_DRAW); // numbers to that buffer
 }
 
 // setup the webGL shaders
@@ -331,7 +359,12 @@ function setupShaders() {
     // define vertex shader in essl using es6 template strings
     var vShaderCode = `
         attribute vec3 vertexPosition;
-        attribute vec3 vertexColor;
+        attribute vec3 vertexNormal;
+        attribute vec3 ambient;
+        attribute vec3 diffuse;
+        attribute vec3 specular;
+        attribute float specularExponent;
+        attribute float shapeNum;
 
         varying lowp vec4 vColor;
 
@@ -397,9 +430,24 @@ function setupShaders() {
                 vertexSpecExpAttrib = gl.getAttribLocation(shaderProgram, "specularExponent");
                 gl.enableVertexAttribArray(vertexSpecExpAttrib)
 
-                // TODO: Setup uniforms
+                vertexShapeNumAttrib = gl.getAttribLocation(shaderProgram, "shapeNum");
+                gl.enableVertexAttribArray(vertexShapeNumAttrib);
 
-                
+                // Setup uniforms
+                eyePosUniform = gl.getUniformLocation(shaderProgram, 'eyePos');
+                gl.uniform3fv(eyePosUniform, eye);
+
+                projMatrixUniform = gl.getUniformLocation(shaderProgram, 'projMatrix');
+                gl.uniformMatrix4fv(projMatrixUniform, gl.FALSE, projectionMatrix);
+
+                viewMatrixUniform = gl.getUniformLocation(shaderProgram, 'viewMatrix');
+                gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
+
+                xformMatrixUniform = gl.getUniformLocation(shaderProgram, 'xformMatrix');
+                gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
+
+                lightPosUniform = gl.getUniformLocation(shaderProgram, 'lightPos');
+                gl.uniform3fv(lightPosUniform, lightLoc);
 
             } // end if no shader program link errors
         } // end if no compile errors
@@ -408,11 +456,11 @@ function setupShaders() {
     catch(e) {
         console.log(e);
     } // end catch
-    altPosition = false;
-    setTimeout(function alterPosition() {
-        altPosition = !altPosition;
-        setTimeout(alterPosition, 2000);
-    }, 2000); // switch flag value every 2 seconds
+    // altPosition = false;
+    // setTimeout(function alterPosition() {
+    //     altPosition = !altPosition;
+    //     setTimeout(alterPosition, 2000);
+    // }, 2000); // switch flag value every 2 seconds
 } // end setup shaders
 
 var bgColor = 0;
@@ -428,9 +476,23 @@ function renderTriangles() {
     gl.vertexAttribPointer(vertexPositionAttrib,3,gl.FLOAT,false,0,0); // feed
     // gl.uniform1i(altPositionUniform, altPosition); // feed
 
-    // color buffer: activate and feed into vertex shader
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); // activate
-    gl.vertexAttribPointer(vertexColorAttrib,3,gl.FLOAT,false,0,0); // feed
+    // normal buffer: activate and feed into vertex shader
+    gl.bindBuffer(gl.ARRAY_BUFFER,normalBuffer); // activate
+    gl.vertexAttribPointer(vertexNormalAttrib,3,gl.FLOAT,false,0,0); // feed
+
+    // color buffers: activate and feed into vertex shader
+    gl.bindBuffer(gl.ARRAY_BUFFER, ambientBuffer); // activate
+    gl.vertexAttribPointer(vertexAmbientAttrib,3,gl.FLOAT,false,0,0); // feed
+    gl.bindBuffer(gl.ARRAY_BUFFER, diffuseBuffer); // activate
+    gl.vertexAttribPointer(vertexDiffuseAttrib,3,gl.FLOAT,false,0,0); // feed
+    gl.bindBuffer(gl.ARRAY_BUFFER, specularBuffer); // activate
+    gl.vertexAttribPointer(vertexSpecularAttrib,3,gl.FLOAT,false,0,0); // feed
+    gl.bindBuffer(gl.ARRAY_BUFFER, specExpBuffer); // activate
+    gl.vertexAttribPointer(vertexSpecExpAttrib,1,gl.FLOAT,false,0,0); // feed
+
+    // shapeNum buffer: activate and feed into vertex shader
+    gl.bindBuffer(gl.ARRAY_BUFFER, shapeNumBuffer); // activate
+    gl.vertexAttribPointer(vertexShapeNumAttrib,1,gl.FLOAT,false,0,0); // feed
 
     // // triangle buffer: activate and render
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,triangleBuffer); // activate
@@ -446,10 +508,8 @@ function main() {
   
   setupWebGL(); // set up the webGL environment
   loadTriangles(); // load in the triangles from tri file
-//   console.log(vertexBuffer);
-  console.log(vertexBuffer[0]);
-  console.log(vertexBuffer[1]);
-//   loadEllipsoids(); // load the ellipsoids from json
+  loadEllipsoids(); // load the ellipsoids from json
+  console.log("triBufferSize = " + triBufferSize);
 //   setupShaders(); // setup the webGL shaders
 //   renderTriangles(); // draw the triangles using webGL
 
