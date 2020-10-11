@@ -1,3 +1,10 @@
+/**
+ * References: 
+ * https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
+ * https://www.quirksmode.org/js/keys.html
+ * http://glmatrix.net/docs/
+ */
+
 /* GLOBAL CONSTANTS AND VARIABLES */
 
 /* assignment specific globals */
@@ -16,7 +23,6 @@ var lightColor = new vec3.fromValues(1,1,1); // Color of default light
 var projectionMatrix = mat4.create(); // projection matrix in JS
 var viewMatrix = mat4.create(); // view matrix in JS
 var transformMatrix = mat4.create(); // transform matrix in JS
-var viewportMatrix = mat4.create(); // viewport matrix in JS
 
 /* webgl globals */
 var gl = null; // the all powerful gl object. It's all here folks!
@@ -58,22 +64,9 @@ var viewMatrixUniform; // view matrix in shaders
 var xformMatrixUniform; // transform matrix in shaders
 var lightPosUniform; // light position in shaders
 var lightColorUniform; // light color in shaders
+var currentShapeUniform; // shape currently highlighted
 
 // ASSIGNMENT HELPER FUNCTIONS
-
-// Returns dot product of two 3D vectors
-function dot( vec1, vec2 ) {
-    return vec1[0] * vec2[0] + vec1[1] * vec2[1] + vec1[1] * vec2[1];
-}
-
-// Returns normalized copy of input vector
-function norm( vec1 ) {
-    var magnitude = Math.sqrt( Math.pow( vec1[0], 2 ) + Math.pow( vec1[1], 2 ) + Math.pow( vec1[2], 2 ) );
-    return new vec3.fromValues(
-        vec1[0] / magnitude,
-        vec1[1] / magnitude,
-        vec1[2] / magnitude);
-}
 
 // get the JSON file from the passed URL
 function getJSONFile(url,descr) {
@@ -161,9 +154,6 @@ function loadTriangles() {
                 triBufferSize += 3;
             }
 
-            // // Activate buffers
-            // setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
-
             // Add center coords, update shapeNum and indexOffset
             if (set == 0) {
                 var vtx1 = inputTriangles[set].vertices[0];
@@ -179,7 +169,7 @@ function loadTriangles() {
                 var xCenter = (vtx1[0] + vtx3[0]) / 2;
                 var yCenter = (vtx1[1] + vtx3[1]) / 2;
                 var zCenter = (vtx1[2] + vtx3[2]) / 2;
-                var center = {x: xCenter, y: yCenter, z: zCenter};
+                var center = [xCenter, yCenter, zCenter];
             }
             shapeCenters[shapeNum] = center;
             shapeNum++; // done with this shape
@@ -251,15 +241,12 @@ function loadEllipsoidsParam() {
                 }
             }
 
-            // // Add this ellipsoid to webGL buffers
-            // setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
-
             // Add center coords, update shapeNum and indexOffset
-            var center = {
-                x: inputEllipsoids[ellipsoid].x,
-                y: inputEllipsoids[ellipsoid].y,
-                z: inputEllipsoids[ellipsoid].z
-            };
+            var center = [
+                inputEllipsoids[ellipsoid].x,
+                inputEllipsoids[ellipsoid].y,
+                inputEllipsoids[ellipsoid].z
+            ];
             shapeCenters[shapeNum] = center;
             shapeNum++ // done with this shape
             indexOffset += vertexCount;
@@ -330,6 +317,7 @@ function setupShaders() {
         uniform mat4 projMatrix;
         uniform mat4 viewMatrix;
         uniform mat4 xformMatrix;
+        uniform float currentShape;
 
         varying lowp vec4 vColor;
 
@@ -353,7 +341,12 @@ function setupShaders() {
                 }
             }
 
-            gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
+            if (shapeNum == currentShape) {
+                gl_Position = projMatrix * viewMatrix * xformMatrix * vec4(vertexPosition, 1.0); // use transform matrix
+            } else {
+                gl_Position = projMatrix * viewMatrix * vec4(vertexPosition, 1.0); // use untransformed position
+            }
+
             vColor = vec4(color, 1.0);
         }
     `;
@@ -421,12 +414,17 @@ function setupShaders() {
                 eyePosUniform = gl.getUniformLocation(shaderProgram, 'eyePos');
                 gl.uniform3fv(eyePosUniform, eye);
 
+                mat4.perspective(projectionMatrix, glMatrix.toRadian(90), 1, 0.1, 100);
                 projMatrixUniform = gl.getUniformLocation(shaderProgram, 'projMatrix');
                 gl.uniformMatrix4fv(projMatrixUniform, gl.FALSE, projectionMatrix);
-
+                
+                var center = vec3.create();
+                vec3.add(center, eye, lookAt);
+                mat4.lookAt(viewMatrix, eye, center, upVector);
                 viewMatrixUniform = gl.getUniformLocation(shaderProgram, 'viewMatrix');
                 gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
 
+                mat4.identity(transformMatrix);
                 xformMatrixUniform = gl.getUniformLocation(shaderProgram, 'xformMatrix');
                 gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
 
@@ -436,6 +434,8 @@ function setupShaders() {
                 lightColorUniform = gl.getUniformLocation(shaderProgram, 'lightColor');
                 gl.uniform3fv(lightColorUniform, lightColor);
 
+                currentShapeUniform = gl.getUniformLocation(shaderProgram, 'currentShape');
+                gl.uniform1f(currentShapeUniform, shapeNum);
             } // end if no shader program link errors
         } // end if no compile errors
     } // end try 
@@ -483,6 +483,62 @@ function renderTriangles() {
     // gl.drawArrays(gl.TRIANGLES,0,triBufferSize); // render
 } // end render triangles
 
+// Process key presses for shape selection
+function selectShape(e) {
+    requestAnimationFrame(selectShape);
+    var deselect = false;
+
+    switch (e.keyCode) {
+        case 37: // left - highlight previous triangle set
+        case 39: // right - highlight next triangle set
+            if (shapeNum <= 0) {
+                shapeNum = 1;
+            } else if (shapeNum >= 1) {
+                shapeNum = 0;
+            }
+            break;
+        case 38: // up - highlight next ellipsoid
+            if (shapeNum < 2 || shapeNum >= 4) {
+                shapeNum = 2;
+            } else {
+                shapeNum++;
+            }
+            break;
+        case 40: // down - highlight previous ellipsoid
+            if (shapeNum <= 2) {
+                shapeNum = 4;
+            } else {
+                shapeNum--;
+            }
+            break;
+        case 32: // space - deselect and turn off highlight
+            deselect = true;
+            break;
+    }
+    // Update currentShape and transform matrix for highlighting
+    // var toOrigin = new vec3.fromValues(shapeCenters[shapeNum] * -1);
+    // mat4.fromTranslation(transformMatrix, toOrigin);
+    mat4.translate(transformMatrix, transformMatrix, new vec3.fromValues(shapeCenters[shapeNum] * -1));
+    var scaleFactor = (deselect) ? 0.8 : 1.2;
+    // mat4.fromScaling(transformMatrix, new vec3.fromValues(scaleFactor, scaleFactor, scaleFactor));
+    // mat4.fromTranslation(transformMatrix, new vec3.fromValues(shapeCenters[shapeNum]));
+    mat4.scale(transformMatrix, transformMatrix, new vec3.fromValues(scaleFactor, scaleFactor, scaleFactor));
+    mat4.translate(transformMatrix, transformMatrix, new vec3.fromValues(shapeCenters[shapeNum]));
+
+    if (deselect) {
+        shapeNum = -1;
+    }
+
+    // Send transform matrix and render
+    gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
+    gl.uniform1f(currentShapeUniform, shapeNum);
+    renderTriangles();
+}
+
+// Process key presses for all view and model transforms
+function processKeys(e) {
+    
+}
 
 /* MAIN -- HERE is where execution begins after window load */
 
@@ -491,10 +547,11 @@ function main() {
     setupWebGL(); // set up the webGL environment
     loadTriangles(); // load in the triangles from tri file
     loadEllipsoidsParam(); // load the ellipsoids from json
-    console.log(shapeCenters);
-    console.log(masterShapeNumArray);
+    shapeNum = -1.0; // reset shapeNum
     setupBuffers(masterCoordArray, masterNormArray, masterIndexArray, masterAmbientArray, masterDiffuseArray, masterSpecularArray, masterSpecExpArray, masterShapeNumArray);
     setupShaders(); // setup the webGL shaders
+    document.onkeydown = selectShape; // arrow keys for shape selection
+    document.onkeypress = processKeys; // keys for transforms
     renderTriangles(); // draw the triangles using webGL
 
 } // end main
