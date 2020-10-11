@@ -12,7 +12,7 @@ var eye = new vec3.fromValues(0.5,0.5,-0.5); // default eye position in world sp
 var lookAt = new vec3.fromValues(0,0,1); // Default lookAt vector
 var upVector = new vec3.fromValues(0,1,0); // Default up vector
 var lightPos = new vec3.fromValues(-0.5,1.5,-0.5); // Default light location
-var lightColor = {ambient: 1, diffuse: 1, specular: 1}; // Color of default light
+var lightColor = new vec3.fromValues(1,1,1); // Color of default light
 var projectionMatrix = mat4.create(); // projection matrix in JS
 var viewMatrix = mat4.create(); // view matrix in JS
 var transformMatrix = mat4.create(); // transform matrix in JS
@@ -21,16 +21,25 @@ var viewportMatrix = mat4.create(); // viewport matrix in JS
 /* webgl globals */
 var gl = null; // the all powerful gl object. It's all here folks!
 
+var masterCoordArray = []; // coords to vertexBuffer
 var vertexBuffer; // this contains vertex coordinates in triples
+var masterNormArray = []; // normals to normalBuffer
 var normalBuffer; // this contains normal vectors for each vertex
+var masterIndexArray = []; // indices to triangleBuffer
 var triangleBuffer; // this contains indices into vertexBuffer in triples
+var masterShapeNumArray = []; // shape numbers for shapeNumBuffer
 var shapeNumBuffer; // what number shape is this?
+var masterAmbientArray = []; // ambient values to ambientBuffer
 var ambientBuffer; // ambient rgb values for each vertex
+var masterDiffuseArray = []; // diffuse values to diffuseBuffer
 var diffuseBuffer; // diffuse rgb values for each vertex
+var masterSpecularArray = []; // specular values to specularBuffer
 var specularBuffer; // specular rgb values for each vertex
+var masterSpecExpArray = []; // specular exponent values to specExpBuffer
 var specExpBuffer; // specular exponent for each vertex
 var triBufferSize = 0; // the number of indices in the triangle buffer
 var shapeNum = 0; // which shape are we working with? Tris 0,1, Ellipsoids 2-4
+var indexOffset = 0; // offset for index array
 
 // Attributes
 var vertexPositionAttrib; // where to put position for vertex shader
@@ -115,97 +124,47 @@ function setupWebGL() {
  
 } // end setupWebGL
 
-// Calculates Blinn-Phong color for a given vertex
-// function getBPColor(vertex, normal, ambient, diffuse, specular, specExp) {
-//     // Get normal vector, normalize
-//     normal = norm( {
-//         x: (normal[0]),
-//         y: (normal[1]),
-//         z: (normal[2])
-//     } );
-
-//     // Get half vector
-//     var light = norm( {
-//         x: lightLoc[0] - vertex[0],
-//         y: lightLoc[1] - vertex[1],
-//         z: lightLoc[2] - vertex[2]});
-//     var V = norm( {
-//         x: eye[0] - vertex[0],
-//         y: eye[1] - vertex[1],
-//         z: eye[2] - vertex[2]});
-//     var half = norm( {
-//         x: light.x + V.x,
-//         y: light.y + V.y,
-//         z: light.z + V.z});
-    
-//     // Calculate RGB color components
-//     var color = [];
-//     for (var i = 0; i < 3; i++) {
-//         color[i] = ambient[i] * lightColor.ambient; // ambient term
-//         color[i] += diffuse[i] * lightColor.diffuse * dot( normal, light ); // diffuse term
-//         color[i] += specular[i] * lightColor.specular * Math.pow( dot( normal, half ), specExp ); // specular term
-        
-//         // Clamp color bounds
-//         if ( color[i] > 1 ) {
-//             color[i] = 1;
-//         } 
-//         else if ( color[i] < 0 ) {
-//             color[i] = 0;
-//         }
-//     }
-
-//     return color;
-// }
-
 function loadTriangles() {
     var inputTriangles = getJSONFile(INPUT_TRIANGLES_URL,"triangles");
 
     if (inputTriangles != String.null) {
         for (var set = 0; set < inputTriangles.length; set++) {
-            var coordArray = []; // array of xyz coords for vertex
-            var normArray = []; // array of xyz normal coords for vertex
-            var indexArray = []; // array of indices to make triangles
-            var ambientArray = []; // ambient rgb for each vertex
-            var diffuseArray = []; // diffuse rgb for each vertex
-            var specularArray = []; // specular rgb for each vertex
-            var specExpArray = []; // specular exponent for BP shading
-            var shapeNumArray = []; // what shape is this?
 
             // Get verticesfrom JSON
             for (var vertex = 0; vertex < inputTriangles[set].vertices.length; vertex++) {
                 var vtxToAdd = inputTriangles[set].vertices[vertex];
-                coordArray.push(vtxToAdd[0], vtxToAdd[1], vtxToAdd[2]);
-                normArray.push(0,0,-1);
-                ambientArray.push(
+                masterCoordArray.push(vtxToAdd[0], vtxToAdd[1], vtxToAdd[2]);
+                masterNormArray.push(0,0,-1);
+                masterAmbientArray.push(
                     inputTriangles[set].material.ambient[0],
                     inputTriangles[set].material.ambient[1],
                     inputTriangles[set].material.ambient[2]);
-                diffuseArray.push(
+                masterDiffuseArray.push(
                     inputTriangles[set].material.diffuse[0],
                     inputTriangles[set].material.diffuse[1],
                     inputTriangles[set].material.diffuse[2]);
-                specularArray.push(
+                masterSpecularArray.push(
                     inputTriangles[set].material.specular[0],
                     inputTriangles[set].material.specular[1],
                     inputTriangles[set].material.specular[2]);
-                specExpArray.push(inputTriangles[set].material.n);
-                shapeNumArray.push(shapeNum);
+                masterSpecExpArray.push(inputTriangles[set].material.n);
+                masterShapeNumArray.push(shapeNum);
             }
 
             // Get triangle indices from JSON
             for (var face = 0; face < inputTriangles[set].triangles.length; face++) {
-                indexArray.push(
-                    inputTriangles[set].triangles[face][0],
-                    inputTriangles[set].triangles[face][1],
-                    inputTriangles[set].triangles[face][2]
-                );
+                masterIndexArray.push(
+                    inputTriangles[set].triangles[face][0] + indexOffset,
+                    inputTriangles[set].triangles[face][1] + indexOffset,
+                    inputTriangles[set].triangles[face][2] + indexOffset);
                 triBufferSize += 3;
             }
 
-            // Activate buffers
-            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
+            // // Activate buffers
+            // setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
 
             shapeNum++; // done with this shape
+            indexOffset += inputTriangles[set].vertices.length;
         }
     }
 }
@@ -215,14 +174,6 @@ function loadEllipsoidsParam() {
 
     if (inputEllipsoids != String.null) {
         for (var ellipsoid = 0; ellipsoid < inputEllipsoids.length; ellipsoid++) {
-            var coordArray = []; // array of xyz coords for vertex
-            var normArray = []; // array of xyz normal coords for vertex
-            var indexArray = []; // array of indices to make triangles
-            var ambientArray = []; // ambient rgb for each vertex
-            var diffuseArray = []; // diffuse rgb for each vertex
-            var specularArray = []; // specular rgb for each vertex
-            var specExpArray = []; // specular exponent for BP shading
-            var shapeNumArray = []; // what shape is this?
             var vertexCount = 0; // count of vertices for index array
 
             var ellCenter = {
@@ -247,25 +198,25 @@ function loadEllipsoidsParam() {
                     var y = ellCenter.y + (b * Math.sin(theta) * Math.sin(phi));
                     var z = ellCenter.z + (c * Math.cos(theta));
 
-                    coordArray.push(x,y,z);
-                    normArray.push(
+                    masterCoordArray.push(x,y,z);
+                    masterNormArray.push(
                         Math.sin(theta) * Math.cos(phi),
                         Math.sin(theta) * Math.sin(phi),
                         Math.cos(theta));
-                    ambientArray.push(
+                    masterAmbientArray.push(
                         inputEllipsoids[ellipsoid].ambient[0],
                         inputEllipsoids[ellipsoid].ambient[1],
                         inputEllipsoids[ellipsoid].ambient[2]);
-                    diffuseArray.push(
+                    masterDiffuseArray.push(
                         inputEllipsoids[ellipsoid].diffuse[0],
                         inputEllipsoids[ellipsoid].diffuse[1],
                         inputEllipsoids[ellipsoid].diffuse[2]);
-                    specularArray.push(
+                    masterSpecularArray.push(
                         inputEllipsoids[ellipsoid].specular[0],
                         inputEllipsoids[ellipsoid].specular[1],
                         inputEllipsoids[ellipsoid].specular[2]);
-                    specExpArray.push(inputEllipsoids[ellipsoid].n);
-                    shapeNumArray.push(shapeNum);
+                    masterSpecExpArray.push(inputEllipsoids[ellipsoid].n);
+                    masterShapeNumArray.push(shapeNum);
 
                     // Get indices based on 2 tris between each longitude
                     var vtx1 = vertexCount;
@@ -274,81 +225,22 @@ function loadEllipsoidsParam() {
                     var tri1 = [vtx1, vtx2, vtx1 + 1];
                     var tri2 = [vtx2, vtx2 + 1, vtx1 + 1];
 
-                    indexArray.push(tri1[0], tri1[1], tri1[2], tri2[0], tri2[1],tri2[2]);
+                    masterIndexArray.push(tri1[0] + indexOffset, tri1[1] + indexOffset, tri1[2] + indexOffset, tri2[0] + indexOffset, tri2[1] + indexOffset,tri2[2] + indexOffset);
                     triBufferSize += 6;
 
                     vertexCount++; // done with this vertex
                 }
             }
 
-            // Add this ellipsoid to webGL buffers
-            setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
+            // // Add this ellipsoid to webGL buffers
+            // setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
 
             shapeNum++ // done with this shape
+            indexOffset += vertexCount;
         }
     }
 
 }
-
-// function loadEllipsoids() {
-//     var inputEllipsoids = getJSONFile(INPUT_ELLIPSOIDS_URL, "ellipsoids");
-//     var sphereFile = getJSONFile("spheren.json","sphere");
-
-//     // console.log(sphereFile);
-
-//     if (inputEllipsoids != String.null) {
-//         for (var ellipsoid = 0; ellipsoid < inputEllipsoids.length; ellipsoid++) {
-//             var coordArray = []; // array of xyz coords for vertex
-//             var normArray = []; // array of xyz normal coords for vertex
-//             var indexArray = []; // array of indices to make triangles
-//             var ambientArray = []; // ambient rgb for each vertex
-//             var diffuseArray = []; // diffuse rgb for each vertex
-//             var specularArray = []; // specular rgb for each vertex
-//             var specExpArray = []; // specular exponent for BP shading
-//             var shapeNumArray = []; // what shape is this?
-
-//             // Load vertex and color arrays
-//             for (var vtxCoord = 0; vtxCoord < sphereFile[0].vertices.length; vtxCoord += 3) {
-//                 coordArray.push(
-//                     sphereFile[0].vertices[vtxCoord], 
-//                     sphereFile[0].vertices[vtxCoord + 1], 
-//                     sphereFile[0].vertices[vtxCoord + 2]);
-//                 normArray.push(
-//                     sphereFile[0].normals[vtxCoord],
-//                     sphereFile[0].normals[vtxCoord + 1],
-//                     sphereFile[0].normals[vtxCoord + 2]);
-//                 ambientArray.push(
-//                     inputEllipsoids[ellipsoid].ambient[0],
-//                     inputEllipsoids[ellipsoid].ambient[1],
-//                     inputEllipsoids[ellipsoid].ambient[2]);
-//                 diffuseArray.push(
-//                     inputEllipsoids[ellipsoid].diffuse[0],
-//                     inputEllipsoids[ellipsoid].diffuse[1],
-//                     inputEllipsoids[ellipsoid].diffuse[2]);
-//                 specularArray.push(
-//                     inputEllipsoids[ellipsoid].specular[0],
-//                     inputEllipsoids[ellipsoid].specular[1],
-//                     inputEllipsoids[ellipsoid].specular[2]);
-//                 specExpArray.push(inputEllipsoids[ellipsoid].n);
-//                 shapeNumArray.push(shapeNum);
-//             }
-
-//             for (var index = 0; index < sphereFile[0].triangles.length; index += 3) {
-//                 indexArray.push(
-//                     sphereFile[0].triangles[index],
-//                     sphereFile[0].triangles[index + 1],
-//                     sphereFile[0].triangles[index + 2]
-//                 );
-//                 triBufferSize += 3;
-//             }
-
-//             // Add this ellipsoid to webGL buffers
-//             setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
-
-//             shapeNum++; // done with this shape
-//         }
-//     }
-// }
 
 // Send coord, color, tri arrays to WebGL
 function setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray) {
@@ -416,22 +308,16 @@ function setupShaders() {
         varying lowp vec4 vColor;
 
         void main(void) {
-            vec3 N = normalize(vertexNormal);
-            vec3 L = normalize(lightPos);
-            vec3 V = normalize(
-                eyePos[0] - vertexPosition[0], // x
-                eyePos[1] - vertexPosition[1], // y
-                eyePos[2] - vertexPosition[2]); // z
-            vec3 half = normalize(
-                L[0] + V[0], // x
-                L[1] + V[1], // y
-                L[2] + V[2]); // z
+            vec3 N = normalize(vertexNormal); // normal vector
+            vec3 L = normalize(lightPos - vertexPosition); // light vector
+            vec3 V = normalize(eyePos - vertexPosition); // view vector
+            vec3 H = normalize(L + V);
             
             vec3 color;
             for (int i = 0; i < 3; i++) {
                 color[i] = ambient[i] * lightColor[0]; // ambient term
                 color[i] += diffuse[i] * lightColor[1] * dot(N, L); // diffuse term
-                color[i] += specular[i] * lightColor[2] * pow(dot(N, half), specularExponent);  // specular term
+                color[i] += specular[i] * lightColor[2] * pow(dot(N, H), specularExponent);  // specular term
             }
 
             gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
@@ -532,7 +418,7 @@ function renderTriangles() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // clear frame/depth buffers
     // bgColor = (bgColor < 1) ? (bgColor + 0.001) : 0;
     // gl.clearColor(bgColor, 0, 0, 1.0);
-    requestAnimationFrame(renderTriangles);
+    // requestAnimationFrame(renderTriangles);
 
     // vertex buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate
@@ -569,10 +455,11 @@ function renderTriangles() {
 
 function main() {
   
-  setupWebGL(); // set up the webGL environment
-  loadTriangles(); // load in the triangles from tri file
-  loadEllipsoidsParam(); // load the ellipsoids from json
-  setupShaders(); // setup the webGL shaders
-  renderTriangles(); // draw the triangles using webGL
+    setupWebGL(); // set up the webGL environment
+    loadTriangles(); // load in the triangles from tri file
+    loadEllipsoidsParam(); // load the ellipsoids from json
+    setupBuffers(masterCoordArray, masterNormArray, masterIndexArray, masterAmbientArray, masterDiffuseArray, masterSpecularArray, masterSpecExpArray, masterShapeNumArray);
+    setupShaders(); // setup the webGL shaders
+    renderTriangles(); // draw the triangles using webGL
 
 } // end main
