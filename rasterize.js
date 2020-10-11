@@ -39,6 +39,7 @@ var masterSpecExpArray = []; // specular exponent values to specExpBuffer
 var specExpBuffer; // specular exponent for each vertex
 var triBufferSize = 0; // the number of indices in the triangle buffer
 var shapeNum = 0; // which shape are we working with? Tris 0,1, Ellipsoids 2-4
+var shapeCenters = []; // xyz coords of current center for each shape
 var indexOffset = 0; // offset for index array
 
 // Attributes
@@ -163,6 +164,24 @@ function loadTriangles() {
             // // Activate buffers
             // setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
 
+            // Add center coords, update shapeNum and indexOffset
+            if (set == 0) {
+                var vtx1 = inputTriangles[set].vertices[0];
+                var vtx2 = inputTriangles[set].vertices[1];
+                var vtx3 = inputTriangles[set].vertices[2];
+                var xCenter = (vtx1[0] + vtx2[0] + vtx3[0]) / 3;
+                var yCenter = (vtx1[1] + vtx2[1] + vtx3[1]) / 3;
+                var zCenter = (vtx1[2] + vtx2[2] + vtx3[2]) / 3;
+                var center = {x: xCenter, y: yCenter, z: zCenter};
+            } else if (set == 1) {
+                var vtx1 = inputTriangles[set].vertices[0];
+                var vtx3 = inputTriangles[set].vertices[2];
+                var xCenter = (vtx1[0] + vtx3[0]) / 2;
+                var yCenter = (vtx1[1] + vtx3[1]) / 2;
+                var zCenter = (vtx1[2] + vtx3[2]) / 2;
+                var center = {x: xCenter, y: yCenter, z: zCenter};
+            }
+            shapeCenters[shapeNum] = center;
             shapeNum++; // done with this shape
             indexOffset += inputTriangles[set].vertices.length;
         }
@@ -235,6 +254,13 @@ function loadEllipsoidsParam() {
             // // Add this ellipsoid to webGL buffers
             // setupBuffers(coordArray, normArray, indexArray, ambientArray, diffuseArray, specularArray, specExpArray, shapeNumArray);
 
+            // Add center coords, update shapeNum and indexOffset
+            var center = {
+                x: inputEllipsoids[ellipsoid].x,
+                y: inputEllipsoids[ellipsoid].y,
+                z: inputEllipsoids[ellipsoid].z
+            };
+            shapeCenters[shapeNum] = center;
             shapeNum++ // done with this shape
             indexOffset += vertexCount;
         }
@@ -318,6 +344,13 @@ function setupShaders() {
                 color[i] = ambient[i] * lightColor[0]; // ambient term
                 color[i] += diffuse[i] * lightColor[1] * dot(N, L); // diffuse term
                 color[i] += specular[i] * lightColor[2] * pow(dot(N, H), specularExponent);  // specular term
+
+                // Clamp color
+                if (color[i] > 1.0) {
+                    color[i] = 1.0;
+                } else if (color[i] < 0.0) {
+                    color[i] = 0.0;
+                }
             }
 
             gl_Position = vec4(vertexPosition, 1.0); // use the untransformed position
@@ -458,6 +491,8 @@ function main() {
     setupWebGL(); // set up the webGL environment
     loadTriangles(); // load in the triangles from tri file
     loadEllipsoidsParam(); // load the ellipsoids from json
+    console.log(shapeCenters);
+    console.log(masterShapeNumArray);
     setupBuffers(masterCoordArray, masterNormArray, masterIndexArray, masterAmbientArray, masterDiffuseArray, masterSpecularArray, masterSpecExpArray, masterShapeNumArray);
     setupShaders(); // setup the webGL shaders
     renderTriangles(); // draw the triangles using webGL
