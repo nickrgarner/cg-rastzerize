@@ -3,6 +3,7 @@
  * https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
  * https://www.quirksmode.org/js/keys.html
  * http://glmatrix.net/docs/
+ * Sphere creation: https://web.archive.org/web/20180216063848/http://learningwebgl.com/blog/?p=1253
  */
 
 /* GLOBAL CONSTANTS AND VARIABLES */
@@ -431,7 +432,7 @@ function setupShaders() {
                 viewMatrixUniform = gl.getUniformLocation(shaderProgram, 'viewMatrix');
                 gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
 
-                mat4.identity(transformMatrix);
+                // mat4.identity(transformMatrix);
                 xformMatrixUniform = gl.getUniformLocation(shaderProgram, 'xformMatrix');
                 gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
 
@@ -458,7 +459,16 @@ function renderTriangles() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // clear frame/depth buffers
     // bgColor = (bgColor < 1) ? (bgColor + 0.001) : 0;
     // gl.clearColor(bgColor, 0, 0, 1.0);
-    // requestAnimationFrame(renderTriangles);
+    requestAnimationFrame(renderTriangles);
+    
+    // Update view
+    var center = vec3.create();
+    vec3.add(center, eye, lookAt);
+    mat4.lookAt(viewMatrix, eye, center, upVector);
+
+    // Send uniforms
+    gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
+    gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
 
     // vertex buffer: activate and feed into vertex shader
     gl.bindBuffer(gl.ARRAY_BUFFER,vertexBuffer); // activate
@@ -492,9 +502,7 @@ function renderTriangles() {
 
 // Process key presses for shape selection
 function selectShape(e) {
-    requestAnimationFrame(selectShape);
-    var deselect = false;
-
+    // mat4.identity(transformMatrix);
     switch (e.keyCode) {
         case 37: // left - highlight previous triangle set
         case 39: // right - highlight next triangle set
@@ -519,12 +527,13 @@ function selectShape(e) {
             }
             break;
         case 32: // space - deselect and turn off highlight
-            deselect = true;
+            shapeNum = -1;
             break;
+        default:
+            return;
     }
-    // Update currentShape and transform matrix for highlighting
-    if (deselect) {
-        shapeNum = -1;
+
+    if (shapeNum == -1) {
         mat4.identity(transformMatrix);
     } else {
         mat4.fromTranslation(transformMatrix, shapeCenters[shapeNum]);
@@ -532,20 +541,30 @@ function selectShape(e) {
         mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
     }
 
-    // Send transform matrix and render
     gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
     gl.uniform1f(currentShapeUniform, shapeNum);
-    renderTriangles();
+
+    // renderTriangles();
 }
 
 // Process key presses for all view and model transforms
 function processKeys(e) {
     requestAnimationFrame(processKeys);
 
+    // // Apply highlight or reset transform if no shape selected
+    // // console.log(shapeNum);
+    // if (shapeNum == -1) {
+    //     mat4.identity(transformMatrix);
+    // } else {
+    //     mat4.fromTranslation(transformMatrix, shapeCenters[shapeNum]);
+    //     mat4.scale(transformMatrix, transformMatrix, [1.2, 1.2, 1.2]);
+    //     mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+    // }
+    
+
     // Transform amounts per keypress
     var translateAmt = 0.1;
     var rotateAmt = glMatrix.toRadian(1);
-    var scaleAmt = 0.1;
 
     var origin = [0, 0, 0];
 
@@ -571,10 +590,10 @@ function processKeys(e) {
             vec3.add(eye, eye, [0, -translateAmt, 0]);
             break;
         case 65: // A: rotate view left around view Y (yaw)
-            vec3.rotateY(lookAt, lookAt, origin, rotateAmt);
+            vec3.rotateY(lookAt, lookAt, origin, -rotateAmt);
             break;
         case 68: // D: rotate view right around view Y (yaw)
-            vec3.rotateY(lookAt, lookAt, origin, -rotateAmt);
+            vec3.rotateY(lookAt, lookAt, origin, rotateAmt);
             break;
         case 87: // W: rotate view forward around view X (pitch)
             vec3.rotateX(lookAt, lookAt, origin, rotateAmt);
@@ -587,42 +606,58 @@ function processKeys(e) {
         
         // Transform model
         case 107: // k: translate selection left along view X
+            mat4.translate(transformMatrix, transformMatrix, [translateAmt, 0, 0]);
             break;
         case 59: // semicolon: translate selection right along view X
+            mat4.translate(transformMatrix, transformMatrix, [-translateAmt, 0, 0]);
             break;
         case 111: // o: translate selection forward along view Z
+            mat4.translate(transformMatrix, transformMatrix, [0, 0, -translateAmt]);
             break;
         case 108: // l: translate seleciton backward along view Z
+            mat4.translate(transformMatrix, transformMatrix, [0, 0, translateAmt]);
             break;
         case 105: // i: translate selection up along view Y
+            mat4.translate(transformMatrix, transformMatrix, [0, translateAmt, 0]);
             break;
         case 112: // p: translate selection down along view Y
+            mat4.translate(transformMatrix, transformMatrix, [0, -translateAmt, 0]);
             break;
         case 75: // K: rotate selection left around view Y (yaw)
+            mat4.rotateY(transformMatrix, transformMatrix, -rotateAmt);
             break;
         case 58: // colon: rotate selection right around view Y (yaw)
+            mat4.rotateY(transformMatrix, transformMatrix, rotateAmt);
             break;
         case 79: // O: rotate selection forward around view X (pitch)
+            mat4.rotateX(transformMatrix, transformMatrix, rotateAmt);
             break;
         case 76: // L: rotate selection backward around view X (pitch)
+            mat4.rotateX(transformMatrix, transformMatrix, -rotateAmt);
             break;
         case 73: // I: rotate selection clockwise around view Z (roll)
+            mat4.rotateZ(transformMatrix, transformMatrix, -rotateAmt);
             break;
         case 80: // P: rotate selection counterclockwise around view Z (roll)
+            mat4.rotateZ(transformMatrix, transformMatrix, rotateAmt);
             break;
     }
 
-    // Update view
-    var center = vec3.create();
-    vec3.add(center, eye, lookAt);
-    mat4.lookAt(viewMatrix, eye, center, upVector);
+    // if (shapeNum == -1) {
+    //     mat4.identity(transformMatrix);
+    // }
 
-    // Send uniforms
-    gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
-    gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
+    // // Update view
+    // var center = vec3.create();
+    // vec3.add(center, eye, lookAt);
+    // mat4.lookAt(viewMatrix, eye, center, upVector);
 
-    // Render
-    renderTriangles();
+    // // Send uniforms
+    // gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
+    // gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
+
+    // // Render
+    // renderTriangles();
 }
 
 /* MAIN -- HERE is where execution begins after window load */
@@ -632,7 +667,7 @@ function main() {
     setupWebGL(); // set up the webGL environment
     loadTriangles(); // load in the triangles from tri file
     loadEllipsoidsParam(); // load the ellipsoids from json
-    shapeNum = -1.0; // reset shapeNum
+    shapeNum = -1; // reset shapeNum
     setupBuffers(masterCoordArray, masterNormArray, masterIndexArray, masterAmbientArray, masterDiffuseArray, masterSpecularArray, masterSpecExpArray, masterShapeNumArray);
     setupShaders(); // setup the webGL shaders
     document.onkeydown = selectShape; // arrow keys for shape selection
