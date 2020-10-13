@@ -2,14 +2,14 @@ Keybinds
 
 Change View - keypress
 
-a - translate view left along view X		key 97
-d - translate view right along view X		key 100
-w - translate view forward along view Z		key 119
-s - translate view backward along view Z	key 115
-q - translate view up along view Y		key 113
-e - translate view down along view Y		key 101
-A - rotate view left around view Y (yaw)	key 65
-D - rotate view right around view Y (yaw)	key 68
+a - translate view left along view X		    key 97
+d - translate view right along view X		    key 100
+w - translate view forward along view Z		    key 119
+s - translate view backward along view Z	    key 115
+q - translate view up along view Y		        key 113
+e - translate view down along view Y		    key 101
+A - rotate view left around view Y (yaw)	    key 65
+D - rotate view right around view Y (yaw)	    key 68
 W - rotate view forward around view X (pitch)	key 87
 S - rotate view backward around view X (pitch)	key 83
 
@@ -18,19 +18,19 @@ Select Model - keydown
 
 left - select and highlight previous triangle set	key 37
 right - select and highlight next triangle set		key 39
-up - select and highlight next ellipsoid		key 38
+up - select and highlight next ellipsoid		    key 38
 down - select and highlight previous ellipsoid		key 40
-spacebar - deselect and turn off highlight		key 32
+spacebar - deselect and turn off highlight		    key 32
 
 
 Transform Model - keypress
 
-k - translate selection left along view X		key 107
-; - translate selection right along view X		key 59		
+k - translate selection left along view X		    key 107
+; - translate selection right along view X		    key 59		
 o - translate selection forward along view Z		key 111
 l - translate selection backward along view Z		key 108
-i - translate selection up along view Y			key 105
-p - translate selection down along view Y		key 112
+i - translate selection up along view Y			    key 105
+p - translate selection down along view Y		    key 112
 K - rotate selection left around view Y (yaw)		key 75
 : - rotate selection right around view Y (yaw)		key 58
 O - rotate selection forward around view X (pitch)	key 79
