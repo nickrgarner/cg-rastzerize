@@ -1,8 +1,14 @@
 /**
+ * Project 3: Rasterization
+ * Author: Nick Garner, Starter code by Prof. Ben Watson
+ * 
+ * This program dynamically renders and lights triangles and ellipsoids from input JSON files and allows
+ * for selection and transform of shapes via keybinds.
+ * 
  * References: 
- * https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
- * https://www.quirksmode.org/js/keys.html
- * http://glmatrix.net/docs/
+ * General approach: https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
+ * Keybind function planning: https://www.quirksmode.org/js/keys.html
+ * Matrix function use: http://glmatrix.net/docs/
  * Sphere creation: https://web.archive.org/web/20180216063848/http://learningwebgl.com/blog/?p=1253
  */
 
@@ -156,22 +162,6 @@ function loadTriangles() {
             }
 
             // Add center coords, update shapeNum and indexOffset
-            // if (set == 0) {
-            //     var vtx1 = inputTriangles[set].vertices[0];
-            //     var vtx2 = inputTriangles[set].vertices[1];
-            //     var vtx3 = inputTriangles[set].vertices[2];
-            //     var xCenter = (vtx1[0] + vtx2[0] + vtx3[0]) / 3;
-            //     var yCenter = (vtx1[1] + vtx2[1] + vtx3[1]) / 3;
-            //     var zCenter = (vtx1[2] + vtx2[2] + vtx3[2]) / 3;
-            //     var center = {x: xCenter, y: yCenter, z: zCenter};
-            // } else if (set == 1) {
-            //     var vtx1 = inputTriangles[set].vertices[0];
-            //     var vtx3 = inputTriangles[set].vertices[2];
-            //     var xCenter = (vtx1[0] + vtx3[0]) / 2;
-            //     var yCenter = (vtx1[1] + vtx3[1]) / 2;
-            //     var zCenter = (vtx1[2] + vtx3[2]) / 2;
-            //     var center = [xCenter, yCenter, zCenter];
-            // }
             var center = [];
             if (set == 0) {
                 center = [0.25, 0.7, 0.75];
@@ -496,8 +486,6 @@ function renderTriangles() {
     // // triangle buffer: activate and render
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,triangleBuffer); // activate
     gl.drawElements(gl.TRIANGLES,triBufferSize,gl.UNSIGNED_SHORT,0); // render
-
-    // gl.drawArrays(gl.TRIANGLES,0,triBufferSize); // render
 } // end render triangles
 
 // Process key presses for shape selection
@@ -543,24 +531,11 @@ function selectShape(e) {
 
     gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
     gl.uniform1f(currentShapeUniform, shapeNum);
-
-    // renderTriangles();
 }
 
 // Process key presses for all view and model transforms
 function processKeys(e) {
     requestAnimationFrame(processKeys);
-
-    // // Apply highlight or reset transform if no shape selected
-    // // console.log(shapeNum);
-    // if (shapeNum == -1) {
-    //     mat4.identity(transformMatrix);
-    // } else {
-    //     mat4.fromTranslation(transformMatrix, shapeCenters[shapeNum]);
-    //     mat4.scale(transformMatrix, transformMatrix, [1.2, 1.2, 1.2]);
-    //     mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
-    // }
-    
 
     // Transform amounts per keypress
     var translateAmt = 0.1;
@@ -569,95 +544,101 @@ function processKeys(e) {
     var origin = [0, 0, 0];
 
     // Switch based on the character passed in
-    switch (e.keyCode) {
-        // Manipulate view
-        case 97: // a: translate view left along view X
-            vec3.add(eye, eye, [translateAmt, 0, 0]);
-            break;
-        case 100: // d: translate view right along view X
-            vec3.add(eye, eye, [-translateAmt, 0, 0]);
-            break;
-        case 119: // w: translate view forward along view Z
-            vec3.add(eye, eye, [0, 0, translateAmt]);
-            break;
-        case 115: // s: translate view backward along view Z
-            vec3.add(eye, eye, [0, 0, -translateAmt]);
-            break;
-        case 113: // q: translate view up along view Y
-            vec3.add(eye, eye, [0, translateAmt, 0]);
-            break;
-        case 101: // e: translate view down along view Y
-            vec3.add(eye, eye, [0, -translateAmt, 0]);
-            break;
-        case 65: // A: rotate view left around view Y (yaw)
-            vec3.rotateY(lookAt, lookAt, origin, -rotateAmt);
-            break;
-        case 68: // D: rotate view right around view Y (yaw)
-            vec3.rotateY(lookAt, lookAt, origin, rotateAmt);
-            break;
-        case 87: // W: rotate view forward around view X (pitch)
-            vec3.rotateX(lookAt, lookAt, origin, rotateAmt);
-            vec3.rotateX(upVector, upVector, origin, rotateAmt);
-            break;
-        case 83: // S: rotate view backward around view X (pitch)
-            vec3.rotateX(lookAt, lookAt, origin, -rotateAmt);
-            vec3.rotateX(upVector, upVector, origin, -rotateAmt);
-            break;
-        
-        // Transform model
-        case 107: // k: translate selection left along view X
-            mat4.translate(transformMatrix, transformMatrix, [translateAmt, 0, 0]);
-            break;
-        case 59: // semicolon: translate selection right along view X
-            mat4.translate(transformMatrix, transformMatrix, [-translateAmt, 0, 0]);
-            break;
-        case 111: // o: translate selection forward along view Z
-            mat4.translate(transformMatrix, transformMatrix, [0, 0, -translateAmt]);
-            break;
-        case 108: // l: translate seleciton backward along view Z
-            mat4.translate(transformMatrix, transformMatrix, [0, 0, translateAmt]);
-            break;
-        case 105: // i: translate selection up along view Y
-            mat4.translate(transformMatrix, transformMatrix, [0, translateAmt, 0]);
-            break;
-        case 112: // p: translate selection down along view Y
-            mat4.translate(transformMatrix, transformMatrix, [0, -translateAmt, 0]);
-            break;
-        case 75: // K: rotate selection left around view Y (yaw)
-            mat4.rotateY(transformMatrix, transformMatrix, -rotateAmt);
-            break;
-        case 58: // colon: rotate selection right around view Y (yaw)
-            mat4.rotateY(transformMatrix, transformMatrix, rotateAmt);
-            break;
-        case 79: // O: rotate selection forward around view X (pitch)
-            mat4.rotateX(transformMatrix, transformMatrix, rotateAmt);
-            break;
-        case 76: // L: rotate selection backward around view X (pitch)
-            mat4.rotateX(transformMatrix, transformMatrix, -rotateAmt);
-            break;
-        case 73: // I: rotate selection clockwise around view Z (roll)
-            mat4.rotateZ(transformMatrix, transformMatrix, -rotateAmt);
-            break;
-        case 80: // P: rotate selection counterclockwise around view Z (roll)
-            mat4.rotateZ(transformMatrix, transformMatrix, rotateAmt);
-            break;
+    try {
+        switch (e.keyCode) {
+            // Manipulate view
+            case 97: // a: translate view left along view X
+                vec3.add(eye, eye, [translateAmt, 0, 0]);
+                break;
+            case 100: // d: translate view right along view X
+                vec3.add(eye, eye, [-translateAmt, 0, 0]);
+                break;
+            case 119: // w: translate view forward along view Z
+                vec3.add(eye, eye, [0, 0, translateAmt]);
+                break;
+            case 115: // s: translate view backward along view Z
+                vec3.add(eye, eye, [0, 0, -translateAmt]);
+                break;
+            case 113: // q: translate view up along view Y
+                vec3.add(eye, eye, [0, translateAmt, 0]);
+                break;
+            case 101: // e: translate view down along view Y
+                vec3.add(eye, eye, [0, -translateAmt, 0]);
+                break;
+            case 65: // A: rotate view left around view Y (yaw)
+                vec3.rotateY(lookAt, lookAt, origin, -rotateAmt);
+                break;
+            case 68: // D: rotate view right around view Y (yaw)
+                vec3.rotateY(lookAt, lookAt, origin, rotateAmt);
+                break;
+            case 87: // W: rotate view forward around view X (pitch)
+                vec3.rotateX(lookAt, lookAt, origin, rotateAmt);
+                vec3.rotateX(upVector, upVector, origin, rotateAmt);
+                break;
+            case 83: // S: rotate view backward around view X (pitch)
+                vec3.rotateX(lookAt, lookAt, origin, -rotateAmt);
+                vec3.rotateX(upVector, upVector, origin, -rotateAmt);
+                break;
+            
+            // Transform model
+            case 107: // k: translate selection left along view X
+                mat4.translate(transformMatrix, transformMatrix, [translateAmt, 0, 0]);
+                vec3.add(shapeCenters[shapeNum], shapeCenters[shapeNum], [translateAmt, 0, 0]);
+                break;
+            case 59: // semicolon: translate selection right along view X
+                mat4.translate(transformMatrix, transformMatrix, [-translateAmt, 0, 0]);
+                vec3.add(shapeCenters[shapeNum], shapeCenters[shapeNum], [-translateAmt, 0, 0]);
+                break;
+            case 111: // o: translate selection forward along view Z
+                mat4.translate(transformMatrix, transformMatrix, [0, 0, -translateAmt]);
+                vec3.add(shapeCenters[shapeNum], shapeCenters[shapeNum], [0, 0, -translateAmt]);
+                break;
+            case 108: // l: translate seleciton backward along view Z
+                mat4.translate(transformMatrix, transformMatrix, [0, 0, translateAmt]);
+                vec3.add(shapeCenters[shapeNum], shapeCenters[shapeNum], [0, 0, translateAmt]);
+                break;
+            case 105: // i: translate selection up along view Y
+                mat4.translate(transformMatrix, transformMatrix, [0, translateAmt, 0]);
+                vec3.add(shapeCenters[shapeNum], shapeCenters[shapeNum], [0, translateAmt, 0]);
+                break;
+            case 112: // p: translate selection down along view Y
+                mat4.translate(transformMatrix, transformMatrix, [0, -translateAmt, 0]);
+                vec3.add(shapeCenters[shapeNum], shapeCenters[shapeNum], [0, -translateAmt, 0]);
+                break;
+            case 75: // K: rotate selection left around view Y (yaw)
+                mat4.translate(transformMatrix, transformMatrix, shapeCenters[shapeNum]);
+                mat4.rotateY(transformMatrix, transformMatrix, -rotateAmt);
+                mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+                break;
+            case 58: // colon: rotate selection right around view Y (yaw)
+                mat4.translate(transformMatrix, transformMatrix, shapeCenters[shapeNum]);
+                mat4.rotateY(transformMatrix, transformMatrix, rotateAmt);
+                mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+                break;
+            case 79: // O: rotate selection forward around view X (pitch)
+                mat4.translate(transformMatrix, transformMatrix, shapeCenters[shapeNum]);
+                mat4.rotateX(transformMatrix, transformMatrix, rotateAmt);
+                mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+                break;
+            case 76: // L: rotate selection backward around view X (pitch)
+                mat4.translate(transformMatrix, transformMatrix, shapeCenters[shapeNum]);
+                mat4.rotateX(transformMatrix, transformMatrix, -rotateAmt);
+                mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+                break;
+            case 73: // I: rotate selection clockwise around view Z (roll)
+                mat4.translate(transformMatrix, transformMatrix, shapeCenters[shapeNum]);
+                mat4.rotateZ(transformMatrix, transformMatrix, -rotateAmt);
+                mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+                break;
+            case 80: // P: rotate selection counterclockwise around view Z (roll)
+                mat4.translate(transformMatrix, transformMatrix, shapeCenters[shapeNum]);
+                mat4.rotateZ(transformMatrix, transformMatrix, rotateAmt);
+                mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
+                break;
+        }
+    } catch (error) {
+        console.log("Error: a shape must be selected perform a shape transform.");
     }
-
-    // if (shapeNum == -1) {
-    //     mat4.identity(transformMatrix);
-    // }
-
-    // // Update view
-    // var center = vec3.create();
-    // vec3.add(center, eye, lookAt);
-    // mat4.lookAt(viewMatrix, eye, center, upVector);
-
-    // // Send uniforms
-    // gl.uniformMatrix4fv(xformMatrixUniform, gl.FALSE, transformMatrix);
-    // gl.uniformMatrix4fv(viewMatrixUniform, gl.FALSE, viewMatrix);
-
-    // // Render
-    // renderTriangles();
 }
 
 /* MAIN -- HERE is where execution begins after window load */
