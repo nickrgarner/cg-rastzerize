@@ -203,15 +203,16 @@ function loadEllipsoidsParam() {
                     var b = inputEllipsoids[ellipsoid].b;
                     var c = inputEllipsoids[ellipsoid].c;
 
-                    var x = ellCenter.x + (a * Math.sin(theta) * Math.cos(phi));
-                    var y = ellCenter.y + (b * Math.sin(theta) * Math.sin(phi));
-                    var z = ellCenter.z + (c * Math.cos(theta));
+                    var xUnit = Math.sin(theta) * Math.cos(phi);
+                    var yUnit = Math.cos(theta);
+                    var zUnit = Math.sin(theta) * Math.sin(phi);
 
-                    masterCoordArray.push(x,y,z);
-                    masterNormArray.push(
-                        Math.sin(theta) * Math.cos(phi),
-                        Math.sin(theta) * Math.sin(phi),
-                        Math.cos(theta));
+                    masterCoordArray.push(
+                        ellCenter.x + (a * xUnit),
+                        ellCenter.y + (b * yUnit),
+                        ellCenter.z + (c * zUnit)
+                    );
+                    masterNormArray.push(xUnit, yUnit, zUnit);
                     masterAmbientArray.push(
                         inputEllipsoids[ellipsoid].ambient[0],
                         inputEllipsoids[ellipsoid].ambient[1],
@@ -344,7 +345,7 @@ function setupShaders() {
             if (shapeNum == currentShape) {
                 gl_Position = projMatrix * viewMatrix * xformMatrix * vec4(vertexPosition, 1.0); // use transform matrix
             } else {
-                gl_Position = projMatrix * viewMatrix * vec4(vertexPosition, 1.0); // use untransformed position
+                gl_Position = projMatrix * viewMatrix * mat4(1.0) * vec4(vertexPosition, 1.0); // use untransformed position
             }
 
             vColor = vec4(color, 1.0);
@@ -516,9 +517,14 @@ function selectShape(e) {
             break;
     }
     // Update currentShape and transform matrix for highlighting
-    // var toOrigin = new vec3.fromValues(shapeCenters[shapeNum] * -1);
+    var toOrigin = new vec3.fromValues(shapeCenters[shapeNum]);
+    for (var i = 0; i < 3; i++) {
+        if (toOrigin[i] != 0) {
+            toOrigin[i] *= -1;
+        }
+    }
     // mat4.fromTranslation(transformMatrix, toOrigin);
-    mat4.translate(transformMatrix, transformMatrix, new vec3.fromValues(shapeCenters[shapeNum] * -1));
+    mat4.translate(transformMatrix, transformMatrix, toOrigin);
     var scaleFactor = (deselect) ? 0.8 : 1.2;
     // mat4.fromScaling(transformMatrix, new vec3.fromValues(scaleFactor, scaleFactor, scaleFactor));
     // mat4.fromTranslation(transformMatrix, new vec3.fromValues(shapeCenters[shapeNum]));
