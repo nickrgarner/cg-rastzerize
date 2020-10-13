@@ -155,21 +155,27 @@ function loadTriangles() {
             }
 
             // Add center coords, update shapeNum and indexOffset
+            // if (set == 0) {
+            //     var vtx1 = inputTriangles[set].vertices[0];
+            //     var vtx2 = inputTriangles[set].vertices[1];
+            //     var vtx3 = inputTriangles[set].vertices[2];
+            //     var xCenter = (vtx1[0] + vtx2[0] + vtx3[0]) / 3;
+            //     var yCenter = (vtx1[1] + vtx2[1] + vtx3[1]) / 3;
+            //     var zCenter = (vtx1[2] + vtx2[2] + vtx3[2]) / 3;
+            //     var center = {x: xCenter, y: yCenter, z: zCenter};
+            // } else if (set == 1) {
+            //     var vtx1 = inputTriangles[set].vertices[0];
+            //     var vtx3 = inputTriangles[set].vertices[2];
+            //     var xCenter = (vtx1[0] + vtx3[0]) / 2;
+            //     var yCenter = (vtx1[1] + vtx3[1]) / 2;
+            //     var zCenter = (vtx1[2] + vtx3[2]) / 2;
+            //     var center = [xCenter, yCenter, zCenter];
+            // }
+            var center = [];
             if (set == 0) {
-                var vtx1 = inputTriangles[set].vertices[0];
-                var vtx2 = inputTriangles[set].vertices[1];
-                var vtx3 = inputTriangles[set].vertices[2];
-                var xCenter = (vtx1[0] + vtx2[0] + vtx3[0]) / 3;
-                var yCenter = (vtx1[1] + vtx2[1] + vtx3[1]) / 3;
-                var zCenter = (vtx1[2] + vtx2[2] + vtx3[2]) / 3;
-                var center = {x: xCenter, y: yCenter, z: zCenter};
+                center = [0.25, 0.7, 0.75];
             } else if (set == 1) {
-                var vtx1 = inputTriangles[set].vertices[0];
-                var vtx3 = inputTriangles[set].vertices[2];
-                var xCenter = (vtx1[0] + vtx3[0]) / 2;
-                var yCenter = (vtx1[1] + vtx3[1]) / 2;
-                var zCenter = (vtx1[2] + vtx3[2]) / 2;
-                var center = [xCenter, yCenter, zCenter];
+                center = [0.25, 0.25, 0.75];
             }
             shapeCenters[shapeNum] = center;
             shapeNum++; // done with this shape
@@ -517,22 +523,12 @@ function selectShape(e) {
             break;
     }
     // Update currentShape and transform matrix for highlighting
-    var toOrigin = new vec3.fromValues(shapeCenters[shapeNum]);
-    for (var i = 0; i < 3; i++) {
-        if (toOrigin[i] != 0) {
-            toOrigin[i] *= -1;
-        }
-    }
-    // mat4.fromTranslation(transformMatrix, toOrigin);
-    mat4.translate(transformMatrix, transformMatrix, toOrigin);
-    var scaleFactor = (deselect) ? 0.8 : 1.2;
-    // mat4.fromScaling(transformMatrix, new vec3.fromValues(scaleFactor, scaleFactor, scaleFactor));
-    // mat4.fromTranslation(transformMatrix, new vec3.fromValues(shapeCenters[shapeNum]));
-    mat4.scale(transformMatrix, transformMatrix, new vec3.fromValues(scaleFactor, scaleFactor, scaleFactor));
-    mat4.translate(transformMatrix, transformMatrix, new vec3.fromValues(shapeCenters[shapeNum]));
-
     if (deselect) {
         shapeNum = -1;
+    } else {
+        mat4.fromTranslation(transformMatrix, shapeCenters[shapeNum]);
+        mat4.scale(transformMatrix, transformMatrix, [1.2, 1.2, 1.2]);
+        mat4.translate(transformMatrix, transformMatrix, [-shapeCenters[shapeNum][0], -shapeCenters[shapeNum][1], -shapeCenters[shapeNum][2]]);
     }
 
     // Send transform matrix and render
